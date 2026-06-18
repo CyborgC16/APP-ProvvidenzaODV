@@ -1,0 +1,218 @@
+{
+  "app_name": "La Provvidenza ODV",
+  "personality": "1 iOS-Native Clean",
+  "personality_one_liner": "Trustworthy, highly accessible, and cleanly structured to serve patients and volunteers without friction, combining healthcare reliability with community warmth.",
+  "color": {
+    "light": {
+      "surface": "#FDFBF7",
+      "onSurface": "#121A26",
+      "surfaceSecondary": "#FFFFFF",
+      "onSurfaceSecondary": "#121A26",
+      "surfaceTertiary": "#F2EFE9",
+      "onSurfaceTertiary": "#121A26",
+      "surfaceInverse": "#121A26",
+      "onSurfaceInverse": "#FDFBF7",
+      "brand": "#FF6B00",
+      "brandPrimary": "#FF6B00",
+      "onBrandPrimary": "#FFFFFF",
+      "brandSecondary": "#1A2E46",
+      "onBrandSecondary": "#FFFFFF",
+      "brandTertiary": "#FFF0E5",
+      "onBrandTertiary": "#FF6B00",
+      "success": "#198754",
+      "onSuccess": "#FFFFFF",
+      "warning": "#FFC107",
+      "onWarning": "#121A26",
+      "error": "#DC3545",
+      "onError": "#FFFFFF",
+      "info": "#0DCAF0",
+      "onInfo": "#121A26",
+      "border": "#E5E0D8",
+      "borderStrong": "#CCC4B5",
+      "divider": "#E5E0D8"
+    },
+    "dark": {
+      "surface": "#0F1621",
+      "onSurface": "#FDFBF7",
+      "surfaceSecondary": "#182334",
+      "onSurfaceSecondary": "#FDFBF7",
+      "surfaceTertiary": "#233248",
+      "onSurfaceTertiary": "#FDFBF7",
+      "surfaceInverse": "#FDFBF7",
+      "onSurfaceInverse": "#0F1621",
+      "brand": "#FF6B00",
+      "brandPrimary": "#FF6B00",
+      "onBrandPrimary": "#FFFFFF",
+      "brandSecondary": "#3D5A80",
+      "onBrandSecondary": "#FFFFFF",
+      "brandTertiary": "#3B261A",
+      "onBrandTertiary": "#FF9D5C",
+      "success": "#198754",
+      "onSuccess": "#FFFFFF",
+      "warning": "#FFC107",
+      "onWarning": "#121A26",
+      "error": "#DC3545",
+      "onError": "#FFFFFF",
+      "info": "#0DCAF0",
+      "onInfo": "#121A26",
+      "border": "#2C3E5A",
+      "borderStrong": "#455E82",
+      "divider": "#2C3E5A"
+    }
+  },
+  "typography": {
+    "displayFontFamily": "Plus Jakarta Sans",
+    "textFontFamily": "Plus Jakarta Sans",
+    "scale": {
+      "sm": 12,
+      "base": 14,
+      "lg": 16,
+      "xl": 20,
+      "2xl": 24
+    }
+  },
+  "spacing": {
+    "rule": "Generous iOS padding. Minimum 16pt (lg) margins on screen edges. 12pt (md) gaps between cards. Keep thumb-zone CTA sticky at the bottom over scrollable content.",
+    "xs": 4,
+    "sm": 8,
+    "md": 12,
+    "lg": 16,
+    "xl": 24,
+    "2xl": 32,
+    "3xl": 48
+  },
+  "radius_tokens": {
+    "sm": 6,
+    "md": 12,
+    "lg": 20,
+    "pill": 999
+  },
+  "shadow_tier": 1,
+  "navigation": "bottom_tabs",
+  "icon_set": "Phosphor",
+  "glassmorphism": {
+    "enabled": true,
+    "do's": [
+      "Use frosted glass on the Home hero card overlay",
+      "Use glass on bottom tab bar and sticky bottom CTA containers",
+      "Layer glass over the logo or hero image for elegant depth"
+    ],
+    "dont's": [
+      "Don't use glass on regular list items or dense data tables in the admin calendar",
+      "Don't use glass behind standard text inputs"
+    ]
+  },
+  "platform_libraries": {
+    "glass": {
+      "ios": "expo-glass-effect",
+      "android": "expo-blur",
+      "low_end_android_fallback": "solid surfaceSecondary"
+    },
+    "image": "expo-image",
+    "blur": "expo-blur",
+    "bottom_sheet": "@gorhom/bottom-sheet",
+    "animation": "react-native-reanimated",
+    "gesture": "react-native-gesture-handler"
+  },
+  "screens": [
+    {
+      "name": "Splash",
+      "purpose": "Brand loading screen featuring the La Provvidenza logo on a cream background.",
+      "states": {
+        "loading": "Logo centered with a subtle pulse animation.",
+        "empty": "N/A",
+        "error": "N/A"
+      },
+      "layout": "Full-screen surface. Image centered. Text 'Pubblica Assistenza Marsala' positioned at the bottom with safe area clearance."
+    },
+    {
+      "name": "Home (Guest)",
+      "purpose": "Overview of services with a prominent call to action to book a medical transport.",
+      "states": {
+        "loading": "Skeleton of the hero card and service cards.",
+        "empty": "N/A",
+        "error": "N/A"
+      },
+      "layout": "Hero card at the top (image background with vertical gradient scrim, large title 'Prenota un Trasporto' and primary CTA button). Below, a 2-col grid for quick links ('Servizio Civile', 'I Nostri Volontari'). Finally, a horizontal scroll section for 'I Nostri Servizi' (Dialysis, Wheelchair). Safe area padding at bottom."
+    },
+    {
+      "name": "Booking Flow",
+      "purpose": "Guest-checkout style multistep form to book ambulance or wheelchair transport.",
+      "states": {
+        "loading": "Spinner during submission.",
+        "empty": "N/A",
+        "error": "Banner at top showing validation or submission errors."
+      },
+      "layout": "Step-by-step layout. Step 1: Large selectable cards for Vehicle Type. Step 2: Calendar & Time picker. Step 3: Vertical form inputs (Patient Name, Pickup, Drop-off). A sticky primary CTA 'Continua/Conferma' pinned to the bottom over a glass or solid container."
+    },
+    {
+      "name": "Static Info Pages (Volunteers / Civil Service)",
+      "purpose": "Showcase the association's volunteers and civil service youth.",
+      "states": {
+        "loading": "Skeleton grids for images.",
+        "empty": "Text 'Nessuna foto disponibile al momento' with an illustration.",
+        "error": "Text 'Impossibile caricare la pagina' and Retry button."
+      },
+      "layout": "Editorial layout. Large cover image with gradient scrim + Title. Followed by a clean text block describing the service. Below, a masonry or 2-column grid of ~10 photos showing volunteers in action."
+    },
+    {
+      "name": "Login",
+      "purpose": "Authentication entry point for Admins and Civil Service users.",
+      "states": {
+        "loading": "Spinner on the login button.",
+        "empty": "N/A",
+        "error": "Inline error messages below inputs."
+      },
+      "layout": "Centered form on screen. Association logo at top. Email and Password fields. Sticky 'Accedi' button. 'Torna alla Home' secondary text link below."
+    },
+    {
+      "name": "Admin Dashboard",
+      "purpose": "Calendar management for slots, users, and booking tracking.",
+      "states": {
+        "loading": "Skeleton list of bookings.",
+        "empty": "Illustration + 'Nessuna prenotazione per questa data'.",
+        "error": "Error banner + Retry button."
+      },
+      "layout": "Top sticky section: Horizontal date strip calendar. Below: List of bookings for the selected date (each card shows Patient, Time, Vehicle, and status badge). A floating action button (FAB) tinted brandPrimary to 'Aggiungi Slot'."
+    },
+    {
+      "name": "Civil Service Dashboard",
+      "purpose": "Read-only personal shift calendar for youth volunteers.",
+      "states": {
+        "loading": "Skeleton of the shift list.",
+        "empty": "Illustration + 'Nessun turno assegnato per questa data'.",
+        "error": "Error banner + Retry button."
+      },
+      "layout": "Top sticky section: Horizontal date strip. Below: List of assigned shifts (Time, Location, Duties). No FAB. Clear and simple."
+    }
+  ],
+  "images": {
+    "splash_logo": {
+      "url": "https://customer-assets.emergentagent.com/job_6ff22b11-31a6-448a-bcd0-492ab14ab6b8/artifacts/qkyr1ljo_LOGO%20FINALE.png",
+      "alt": "La Provvidenza ODV Logo"
+    },
+    "hero_home": {
+      "url": "https://images.unsplash.com/photo-1765233181361-a11f1e5b3c69?crop=entropy&cs=srgb&fm=jpg&ixid=M3w3NDk1NzZ8MHwxfHNlYXJjaHwxfHxpdGFsaWFuJTIwYW1idWxhbmNlJTIwdm9sdW50ZWVyc3xlbnwwfHx8fDE3ODE4MjY2NDB8MA&ixlib=rb-4.1.0&q=85",
+      "dark": "https://images.unsplash.com/photo-1765233181361-a11f1e5b3c69?crop=entropy&cs=srgb&fm=jpg&ixid=M3w3NDk1NzZ8MHwxfHNlYXJjaHwxfHxpdGFsaWFuJTIwYW1idWxhbmNlJTIwdm9sdW50ZWVyc3xlbnwwfHx8fDE3ODE4MjY2NDB8MA&ixlib=rb-4.1.0&q=85",
+      "alt": "Ambulance driving down street"
+    },
+    "ambulance_transport": {
+      "url": "https://images.pexels.com/photos/36756313/pexels-photo-36756313.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940",
+      "dark": "https://images.pexels.com/photos/36756313/pexels-photo-36756313.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940",
+      "alt": "Italian ambulance volunteers"
+    },
+    "civil_service": {
+      "url": "https://images.unsplash.com/photo-1758599667729-a6f0f8bd213b?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NTYxODh8MHwxfHNlYXJjaHwyfHx5b3VuZyUyMGNpdmlsJTIwc2VydmljZSUyMHZvbHVudGVlcnMlMjB3b3JraW5nfGVufDB8fHx8MTc4MTgyNjY0MHww&ixlib=rb-4.1.0&q=85",
+      "dark": "https://images.unsplash.com/photo-1758599667729-a6f0f8bd213b?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NTYxODh8MHwxfHNlYXJjaHwyfHx5b3VuZyUyMGNpdmlsJTIwc2VydmljZSUyMHZvbHVudGVlcnMlMjB3b3JraW5nfGVufDB8fHx8MTc4MTgyNjY0MHww&ixlib=rb-4.1.0&q=85",
+      "alt": "Young civil service volunteers working"
+    }
+  },
+  "instructions_to_main_agent": [
+    "Strictly follow the color palette. Primary is ANPAS Orange (#FF6B00), Accents are Navy Blue (#1A2E46) and Background is Cream (#FDFBF7). Do not use generic AI purples or default blues.",
+    "Implement the Booking Flow as a guest-checkout style process. No login required for standard users to book a ride.",
+    "For all images that act as backgrounds with text overlaid (like the Hero Home card), you MUST apply a linear-gradient scrim (transparent to dark) so the text remains readable. Use onSurfaceInverse for the text color on top of these images.",
+    "The codebase must be responsive for Web. Ensure the multi-column grids (like the Volunteers photos and Home links) wrap gracefully and the Booking Form restricts maximum width on desktop.",
+    "Set up role-based navigation logic after login. Admins go to Admin Dashboard (manage slots/bookings), Civil Service users go to their read-only Shift Calendar.",
+    "Use Phosphor icons consistently across all screens, with standard weights to keep the iOS-Native clean vibe intact."
+  ]
+}
