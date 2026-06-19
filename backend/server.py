@@ -188,6 +188,39 @@ class GalleryPhoto(BaseModel):
     created_at: str
 
 
+class PatientCreate(BaseModel):
+    first_name: str
+    last_name: str
+    address: str
+    dialysis_center: str
+    dialysis_schedule: str  # e.g. "Lun-Mer-Ven 14:00"
+    phone: Optional[str] = None
+    notes: Optional[str] = None
+    map_url: Optional[str] = None  # custom Google Maps link
+
+
+class Patient(BaseModel):
+    id: str
+    first_name: str
+    last_name: str
+    address: str
+    dialysis_center: str
+    dialysis_schedule: str
+    phone: Optional[str] = None
+    notes: Optional[str] = None
+    map_url: Optional[str] = None
+    created_at: str
+
+
+class TeamMember(BaseModel):
+    id: str
+    full_name: str
+    role: str
+    bio: Optional[str] = None
+    age: Optional[int] = None
+    photo_b64: Optional[str] = None
+
+
 class UserCreateResponse(BaseModel):
     user: UserPublic
     generated_password: Optional[str] = None
@@ -741,6 +774,68 @@ async def add_photo(body: GalleryPhotoCreate, user: dict = Depends(require_role(
 async def delete_photo(photo_id: str, user: dict = Depends(require_role("master", "admin"))):
     await db.gallery.delete_one({"id": photo_id})
     return {"ok": True}
+
+
+# ----- Patients (Pz Dializzati) -----
+@api_router.get("/patients", response_model=List[Patient])
+async def list_patients(user: dict = Depends(require_role("master", "admin"))):
+    docs = await db.patients.find({}, {"_id": 0}).sort([("last_name", 1)]).to_list(500)
+    return [Patient(**d) for d in docs]
+
+
+@api_router.post("/patients", response_model=Patient)
+async def create_patient(body: PatientCreate, user: dict = Depends(require_role("master", "admin"))):
+    p = {
+        "id": str(uuid.uuid4()),
+        **body.model_dump(),
+        "created_at": datetime.now(timezone.utc).isoformat(),
+    }
+    await db.patients.insert_one(p)
+    return Patient(**{k: v for k, v in p.items() if k != "_id"})
+
+
+@api_router.patch("/patients/{patient_id}", response_model=Patient)
+async def update_patient(patient_id: str, body: PatientCreate, user: dict = Depends(require_role("master", "admin"))):
+    res = await db.patients.update_one({"id": patient_id}, {"$set": body.model_dump()})
+    if res.matched_count == 0:
+        raise HTTPException(status_code=404, detail="Paziente non trovato")
+    doc = await db.patients.find_one({"id": patient_id}, {"_id": 0})
+    return Patient(**doc)
+
+
+@api_router.delete("/patients/{patient_id}")
+async def delete_patient(patient_id: str, user: dict = Depends(require_role("master", "admin"))):
+    await db.patients.delete_one({"id": patient_id})
+    return {"ok": True}
+
+
+# ----- Team members (public read for Volontari / Servizio Civile pages) -----
+@api_router.get("/team/{role}", response_model=List[TeamMember])
+async def list_team(role: str):
+    if role not in ("admin", "servizio_civile"):
+        raise HTTPException(status_code=400, detail="Ruolo non valido")
+    docs = await db.users.find(
+        {"role": role},
+        {"_id": 0, "id": 1, "full_name": 1, "role": 1, "bio": 1, "age": 1, "photo_b64": 1},
+    ).sort([("full_name", 1)]).to_list(200)
+    return [TeamMember(**d) for d in docs]
+
+
+# ----- Admin sets/updates photo for any user -----
+@api_router.patch("/users/{user_id}/profile", response_model=UserPublic)
+async def admin_update_user_profile(
+    user_id: str,
+    body: UpdateProfileRequest,
+    user: dict = Depends(require_role("master", "admin")),
+):
+    update = {k: v for k, v in body.model_dump().items() if v is not None}
+    if not update:
+        raise HTTPException(status_code=400, detail="Nessuna modifica")
+    res = await db.users.update_one({"id": user_id}, {"$set": update})
+    if res.matched_count == 0:
+        raise HTTPException(status_code=404, detail="Utente non trovato")
+    doc = await db.users.find_one({"id": user_id}, {"_id": 0, "password_hash": 0})
+    return UserPublic(**doc)
 
 
 # include router and middleware

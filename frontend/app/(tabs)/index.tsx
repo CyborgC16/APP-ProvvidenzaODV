@@ -1,5 +1,6 @@
-import { ScrollView, View, Text, StyleSheet, Pressable, Linking } from "react-native";
+import { ScrollView, View, Text, StyleSheet, Pressable, Linking, FlatList, useWindowDimensions } from "react-native";
 import { Image } from "expo-image";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "expo-router";
 import { LinearGradient } from "expo-linear-gradient";
 import { Ionicons } from "@expo/vector-icons";
@@ -8,12 +9,33 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { COLORS, SPACING, RADIUS, SHADOW, LOGO_URL, HERO_IMAGE, AMBULANCE_IMAGE, CIVIL_SERVICE_IMAGE } from "@/src/theme";
 import { useI18n } from "@/src/i18n";
 import LangToggle from "@/src/components/LangToggle";
+import { api, GalleryPhoto } from "@/src/api";
 
 const INSTAGRAM_URL = "https://www.instagram.com/la_provvidenza_anpas/";
 
 export default function Home() {
   const router = useRouter();
   const { t } = useI18n();
+  const { width } = useWindowDimensions();
+  const [photos, setPhotos] = useState<GalleryPhoto[]>([]);
+  const listRef = useRef<FlatList<GalleryPhoto>>(null);
+  const indexRef = useRef(0);
+
+  useEffect(() => {
+    api.listGallery().then(setPhotos).catch(() => {});
+  }, []);
+
+  // Auto-scroll carousel
+  useEffect(() => {
+    if (photos.length < 2) return;
+    const interval = setInterval(() => {
+      indexRef.current = (indexRef.current + 1) % photos.length;
+      listRef.current?.scrollToIndex({ index: indexRef.current, animated: true });
+    }, 3000);
+    return () => clearInterval(interval);
+  }, [photos.length]);
+
+  const itemWidth = Math.min(width - SPACING.lg * 2, 360);
 
   return (
     <SafeAreaView style={styles.safe} edges={["top"]} testID="home-screen">
@@ -107,6 +129,36 @@ export default function Home() {
             <Text style={styles.linkLabel}>I Nostri Volontari</Text>
           </Pressable>
         </View>
+
+        {/* Gallery from Admin */}
+        {photos.length > 0 && (
+          <View testID="home-gallery">
+            <Text style={styles.sectionTitle}>{t("section_gallery")}</Text>
+            <FlatList
+              ref={listRef}
+              data={photos}
+              keyExtractor={(p) => p.id}
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={{ paddingHorizontal: SPACING.lg, gap: SPACING.md }}
+              snapToInterval={itemWidth + SPACING.md}
+              decelerationRate="fast"
+              renderItem={({ item }) => (
+                <View style={[styles.galleryCard, { width: itemWidth }]} testID={`gallery-${item.id}`}>
+                  <Image source={{ uri: item.photo_b64 }} style={StyleSheet.absoluteFill} contentFit="cover" />
+                  {item.caption ? (
+                    <LinearGradient
+                      colors={["transparent", "rgba(0,0,0,0.7)"]}
+                      style={[StyleSheet.absoluteFill, { top: undefined, height: 80 }]}
+                    />
+                  ) : null}
+                  {item.caption ? <Text style={styles.galleryCaption}>{item.caption}</Text> : null}
+                </View>
+              )}
+              getItemLayout={(_, i) => ({ length: itemWidth + SPACING.md, offset: (itemWidth + SPACING.md) * i, index: i })}
+            />
+          </View>
+        )}
 
         {/* About */}
         <View style={styles.aboutCard}>

@@ -44,6 +44,8 @@ export default function RootLayout() {
               <Stack.Screen name="admin/users" />
               <Stack.Screen name="admin/slot-new" options={{ presentation: "modal" }} />
               <Stack.Screen name="admin/shift-new" options={{ presentation: "modal" }} />
+              <Stack.Screen name="admin/patients" />
+              <Stack.Screen name="admin/photos" />
             </Stack>
           </AuthProvider>
         </I18nProvider>

@@ -38,6 +38,31 @@ export type GalleryPhoto = {
   created_at: string;
 };
 
+export type PatientInput = {
+  first_name: string;
+  last_name: string;
+  address: string;
+  dialysis_center: string;
+  dialysis_schedule: string;
+  phone?: string;
+  notes?: string;
+  map_url?: string;
+};
+
+export type Patient = PatientInput & {
+  id: string;
+  created_at: string;
+};
+
+export type TeamMember = {
+  id: string;
+  full_name: string;
+  role: string;
+  bio?: string | null;
+  age?: number | null;
+  photo_b64?: string | null;
+};
+
 export type Slot = {
   id: string;
   date: string;
@@ -158,6 +183,33 @@ export const api = {
   },
   async deletePhoto(id: string) {
     return request<{ ok: boolean }>(`/gallery/${id}`, { method: "DELETE" });
+  },
+
+  // Patients
+  async listPatients() {
+    return request<Patient[]>("/patients");
+  },
+  async createPatient(body: PatientInput) {
+    return request<Patient>("/patients", { method: "POST", body: JSON.stringify(body) });
+  },
+  async updatePatient(id: string, body: PatientInput) {
+    return request<Patient>(`/patients/${id}`, { method: "PATCH", body: JSON.stringify(body) });
+  },
+  async deletePatient(id: string) {
+    return request<{ ok: boolean }>(`/patients/${id}`, { method: "DELETE" });
+  },
+
+  // Team (public)
+  async team(role: "admin" | "servizio_civile") {
+    return request<TeamMember[]>(`/team/${role}`, { auth: false });
+  },
+
+  // Admin sets photo on any user
+  async adminUpdateUserPhoto(userId: string, photo_b64: string) {
+    return request<UserPublic>(`/users/${userId}/profile`, {
+      method: "PATCH",
+      body: JSON.stringify({ photo_b64 }),
+    });
   },
 
   // Users

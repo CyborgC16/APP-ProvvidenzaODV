@@ -22,6 +22,7 @@ import { useAuth } from "@/src/auth";
 import { api, Booking, Slot } from "@/src/api";
 import { useI18n } from "@/src/i18n";
 import LangToggle from "@/src/components/LangToggle";
+import { pickImageBase64 } from "@/src/utils/picker";
 
 export default function Account() {
   const { user, loading, logout, login, refresh } = useAuth();
@@ -222,6 +223,7 @@ function AdminDashboard({
   onNewShift: () => void;
   fullName: string;
 }) {
+  const router = useRouter();
   const [date, setDate] = useState<string>(new Date().toISOString().slice(0, 10));
   const [slots, setSlots] = useState<Slot[]>([]);
   const [bookings, setBookings] = useState<Booking[]>([]);
@@ -270,16 +272,23 @@ function AdminDashboard({
           </Text>
         </View>
         <LangToggle />
-        <Pressable onPress={onOpenUsers} hitSlop={10} testID="open-users-btn" style={styles.iconBtn}>
-          <Ionicons name="people" size={22} color={COLORS.navy} />
-        </Pressable>
-        <Pressable onPress={onNewShift} hitSlop={10} testID="new-shift-btn" style={styles.iconBtn}>
-          <Ionicons name="add-circle" size={22} color={COLORS.brand} />
-        </Pressable>
         <Pressable onPress={onLogout} hitSlop={10} testID="logout-btn" style={styles.iconBtn}>
           <Ionicons name="log-out-outline" size={22} color={COLORS.navy} />
         </Pressable>
       </View>
+
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        contentContainerStyle={styles.quickRowContent}
+        style={styles.quickRow}
+      >
+        <QuickBtn icon="people" label="Utenti" onPress={onOpenUsers} testID="open-users-btn" />
+        <QuickBtn icon="add-circle" label="Nuovo Slot" onPress={onNewSlot} testID="new-slot-btn-q" />
+        <QuickBtn icon="time" label="Nuovo Turno" onPress={onNewShift} testID="new-shift-btn" />
+        <QuickBtn icon="medkit" label="Pz Dializzati" onPress={() => router.push("/admin/patients")} testID="open-patients" />
+        <QuickBtn icon="images" label="Foto" onPress={() => router.push("/admin/photos")} testID="open-photos" />
+      </ScrollView>
 
       <ScrollView
         horizontal
@@ -389,14 +398,16 @@ function AdminDashboard({
 
 // ===== CIVIL SERVICE DASHBOARD =====
 function CivilServiceDashboard({ onLogout, fullName }: { onLogout: () => Promise<void>; fullName: string }) {
-  const [slots, setSlots] = useState<Slot[]>([]);
+  const { user, refresh } = useAuth();
+  const [shifts, setShifts] = useState<Slot[]>([]);
   const [loading, setLoading] = useState(false);
+  const [showProfile, setShowProfile] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
     try {
       const s = await api.mySlots();
-      setSlots(s);
+      setShifts(s);
     } finally {
       setLoading(false);
     }
@@ -408,7 +419,7 @@ function CivilServiceDashboard({ onLogout, fullName }: { onLogout: () => Promise
     }, [load]),
   );
 
-  const grouped = slots.reduce<Record<string, Slot[]>>((acc, s) => {
+  const grouped = shifts.reduce<Record<string, Slot[]>>((acc, s) => {
     (acc[s.date] ||= []).push(s);
     return acc;
   }, {});
@@ -416,14 +427,27 @@ function CivilServiceDashboard({ onLogout, fullName }: { onLogout: () => Promise
   return (
     <SafeAreaView style={styles.safe} edges={["top"]} testID="civil-service-dashboard">
       <View style={styles.dashHeader}>
+        {user?.photo_b64 ? (
+          <Image source={{ uri: user.photo_b64 }} style={styles.avatar} contentFit="cover" />
+        ) : (
+          <View style={[styles.avatar, { backgroundColor: COLORS.brandLight, alignItems: "center", justifyContent: "center" }]}>
+            <Text style={{ color: COLORS.brand, fontWeight: "800", fontSize: 16 }}>{fullName.charAt(0)}</Text>
+          </View>
+        )}
         <View style={{ flex: 1 }}>
           <Text style={styles.dashTitle}>Ciao, {fullName}</Text>
-          <Text style={styles.dashSubtitle}>I tuoi turni di servizio civile</Text>
+          <Text style={styles.dashSubtitle}>Servizio Civile</Text>
         </View>
+        <LangToggle />
+        <Pressable onPress={() => setShowProfile(true)} hitSlop={10} testID="open-profile-btn" style={styles.iconBtn}>
+          <Ionicons name="create-outline" size={22} color={COLORS.navy} />
+        </Pressable>
         <Pressable onPress={onLogout} hitSlop={10} testID="logout-btn" style={styles.iconBtn}>
           <Ionicons name="log-out-outline" size={22} color={COLORS.navy} />
         </Pressable>
       </View>
+
+      <ProfileEditor visible={showProfile} onClose={() => setShowProfile(false)} onSaved={refresh} />
 
       <ScrollView
         contentContainerStyle={styles.dashBody}
@@ -484,6 +508,84 @@ function formatLong(d: string) {
   }
 }
 
+function QuickBtn({ icon, label, onPress, testID }: { icon: any; label: string; onPress: () => void; testID?: string }) {
+  return (
+    <Pressable testID={testID} onPress={onPress} style={styles.quickBtn}>
+      <View style={styles.quickIcon}>
+        <Ionicons name={icon} size={20} color={COLORS.brand} />
+      </View>
+      <Text style={styles.quickLabel}>{label}</Text>
+    </Pressable>
+  );
+}
+
+function ProfileEditor({ visible, onClose, onSaved }: { visible: boolean; onClose: () => void; onSaved: () => Promise<void> }) {
+  const { user } = useAuth();
+  const [fullName, setFullName] = useState(user?.full_name || "");
+  const [bio, setBio] = useState(user?.bio || "");
+  const [age, setAge] = useState(user?.age ? String(user.age) : "");
+  const [photo, setPhoto] = useState<string | null>(user?.photo_b64 || null);
+  const [saving, setSaving] = useState(false);
+
+  const pick = async () => {
+    const b = await pickImageBase64();
+    if (b) setPhoto(b);
+  };
+
+  const save = async () => {
+    setSaving(true);
+    try {
+      await api.updateProfile({
+        full_name: fullName || undefined,
+        bio: bio || undefined,
+        age: age ? parseInt(age, 10) : undefined,
+        photo_b64: photo || undefined,
+      });
+      await onSaved();
+      onClose();
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
+      <KeyboardAvoidingView style={styles.profileModal} behavior={Platform.OS === "ios" ? "padding" : "height"}>
+        <ScrollView contentContainerStyle={styles.profileCard} keyboardShouldPersistTaps="handled">
+          <Text style={styles.modalTitle}>Modifica Profilo</Text>
+          <View style={{ alignItems: "center", marginBottom: SPACING.lg }}>
+            {photo ? (
+              <Image source={{ uri: photo }} style={styles.profileAvatar} contentFit="cover" />
+            ) : (
+              <View style={[styles.profileAvatar, styles.profileAvatarEmpty]}>
+                <Ionicons name="person" size={40} color={COLORS.brand} />
+              </View>
+            )}
+            <Pressable onPress={pick} style={styles.uploadBtn} testID="profile-pick-photo">
+              <Ionicons name="camera" size={16} color={COLORS.white} />
+              <Text style={styles.uploadBtnText}>Cambia foto</Text>
+            </Pressable>
+          </View>
+          <Text style={styles.fieldLabel}>Nome completo</Text>
+          <TextInput value={fullName} onChangeText={setFullName} style={styles.input} testID="profile-fullname" />
+          <Text style={styles.fieldLabel}>Età</Text>
+          <TextInput value={age} onChangeText={setAge} keyboardType="numeric" style={styles.input} testID="profile-age" />
+          <Text style={styles.fieldLabel}>Bio</Text>
+          <TextInput value={bio} onChangeText={setBio} multiline style={[styles.input, { height: 90, textAlignVertical: "top" }]} testID="profile-bio" />
+          <View style={{ flexDirection: "row", gap: SPACING.sm, marginTop: SPACING.md }}>
+            <Pressable onPress={onClose} style={[styles.btn, styles.btnSec]}>
+              <Text style={styles.btnSecText}>Annulla</Text>
+            </Pressable>
+            <Pressable onPress={save} disabled={saving} style={[styles.btn, styles.btnPri, saving && { opacity: 0.5 }]} testID="profile-save">
+              {saving ? <ActivityIndicator color={COLORS.white} /> : <Text style={styles.btnPriText}>Salva</Text>}
+            </Pressable>
+          </View>
+        </ScrollView>
+      </KeyboardAvoidingView>
+    </Modal>
+  );
+}
+
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: COLORS.surface },
   loginScroll: { padding: SPACING.xl, alignItems: "stretch", flexGrow: 1, justifyContent: "center" },
@@ -535,6 +637,24 @@ const styles = StyleSheet.create({
   dashTitle: { fontSize: 17, fontWeight: "700", color: COLORS.navy },
   dashSubtitle: { fontSize: 12, color: COLORS.onSurfaceMuted, marginTop: 2 },
   iconBtn: { padding: 8, borderRadius: RADIUS.sm, backgroundColor: COLORS.surfaceTertiary },
+  avatar: { width: 44, height: 44, borderRadius: 22 },
+  profileModal: { flex: 1, backgroundColor: "rgba(0,0,0,0.5)", justifyContent: "flex-end" },
+  profileCard: { backgroundColor: COLORS.surface, borderTopLeftRadius: RADIUS.lg, borderTopRightRadius: RADIUS.lg, padding: SPACING.lg, maxHeight: "92%" },
+  modalTitle: { fontSize: 18, fontWeight: "700", color: COLORS.navy, marginBottom: SPACING.md, textAlign: "center" },
+  profileAvatar: { width: 100, height: 100, borderRadius: 50, marginBottom: SPACING.sm },
+  profileAvatarEmpty: { backgroundColor: COLORS.brandLight, alignItems: "center", justifyContent: "center" },
+  uploadBtn: { flexDirection: "row", alignItems: "center", gap: 6, backgroundColor: COLORS.brand, paddingHorizontal: 12, paddingVertical: 8, borderRadius: RADIUS.pill },
+  uploadBtnText: { color: COLORS.white, fontWeight: "700", fontSize: 13 },
+  btn: { flex: 1, paddingVertical: 14, borderRadius: RADIUS.md, alignItems: "center" },
+  btnPri: { backgroundColor: COLORS.brand },
+  btnPriText: { color: COLORS.white, fontWeight: "700" },
+  btnSec: { backgroundColor: COLORS.surfaceTertiary },
+  btnSecText: { color: COLORS.navy, fontWeight: "600" },
+  quickRow: { backgroundColor: COLORS.surfaceSecondary, borderBottomWidth: 1, borderBottomColor: COLORS.border },
+  quickRowContent: { paddingHorizontal: SPACING.lg, paddingVertical: SPACING.md, gap: SPACING.sm },
+  quickBtn: { alignItems: "center", width: 80, flexShrink: 0 },
+  quickIcon: { width: 48, height: 48, borderRadius: 24, backgroundColor: COLORS.brandLight, alignItems: "center", justifyContent: "center" },
+  quickLabel: { fontSize: 11, fontWeight: "700", color: COLORS.navy, marginTop: 6, textAlign: "center" },
   dateStrip: { backgroundColor: COLORS.surfaceSecondary, borderBottomWidth: 1, borderBottomColor: COLORS.border },
   dateStripContent: { paddingHorizontal: SPACING.lg, paddingVertical: SPACING.md, gap: SPACING.sm },
   dateChip: {
