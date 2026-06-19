@@ -1,4 +1,4 @@
-import { ScrollView, View, Text, StyleSheet, Pressable } from "react-native";
+import { ScrollView, View, Text, StyleSheet, Pressable, Linking } from "react-native";
 import { Image } from "expo-image";
 import { useRouter } from "expo-router";
 import { LinearGradient } from "expo-linear-gradient";
@@ -6,9 +6,14 @@ import { Ionicons } from "@expo/vector-icons";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { COLORS, SPACING, RADIUS, SHADOW, LOGO_URL, HERO_IMAGE, AMBULANCE_IMAGE, CIVIL_SERVICE_IMAGE } from "@/src/theme";
+import { useI18n } from "@/src/i18n";
+import LangToggle from "@/src/components/LangToggle";
+
+const INSTAGRAM_URL = "https://www.instagram.com/la_provvidenza_anpas/";
 
 export default function Home() {
   const router = useRouter();
+  const { t } = useI18n();
 
   return (
     <SafeAreaView style={styles.safe} edges={["top"]} testID="home-screen">
@@ -18,8 +23,9 @@ export default function Home() {
           <Image source={{ uri: LOGO_URL }} style={styles.headerLogo} contentFit="contain" />
           <View style={{ flex: 1 }}>
             <Text style={styles.brandTitle}>La Provvidenza ODV</Text>
-            <Text style={styles.brandSubtitle}>Pubblica Assistenza · Marsala</Text>
+            <Text style={styles.brandSubtitle}>{t("app_subtitle")}</Text>
           </View>
+          <LangToggle />
         </View>
 
         {/* Hero */}
@@ -34,14 +40,30 @@ export default function Home() {
             style={StyleSheet.absoluteFill}
           />
           <View style={styles.heroContent}>
-            <Text style={styles.heroEyebrow}>SERVIZIO 24/7 · MARSALA</Text>
-            <Text style={styles.heroTitle}>Prenota un{"\n"}Trasporto Sanitario</Text>
-            <Text style={styles.heroSub}>Ambulanza · Furgone Disabili · Emodialisi</Text>
+            <Text style={styles.heroEyebrow}>{t("hero_eyebrow")}</Text>
+            <Text style={styles.heroTitle}>{t("hero_title")}</Text>
+            <Text style={styles.heroSub}>{t("hero_sub")}</Text>
             <View style={styles.heroCTA} testID="home-cta-prenota">
-              <Text style={styles.heroCTAText}>Prenota Ora</Text>
+              <Text style={styles.heroCTAText}>{t("hero_cta")}</Text>
               <Ionicons name="arrow-forward" size={18} color={COLORS.white} />
             </View>
           </View>
+        </Pressable>
+
+        {/* Instagram banner */}
+        <Pressable
+          testID="instagram-link"
+          onPress={() => Linking.openURL(INSTAGRAM_URL)}
+          style={styles.instaCard}
+        >
+          <View style={styles.instaIcon}>
+            <Ionicons name="logo-instagram" size={26} color={COLORS.white} />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.instaTitle}>@la_provvidenza_anpas</Text>
+            <Text style={styles.instaSubtitle}>{t("follow_instagram")}</Text>
+          </View>
+          <Ionicons name="open-outline" size={20} color={COLORS.navy} />
         </Pressable>
 
         {/* Services */}
@@ -188,4 +210,25 @@ const styles = StyleSheet.create({
   },
   aboutTitle: { fontSize: 17, fontWeight: "700", color: COLORS.navy, marginBottom: SPACING.sm },
   aboutBody: { fontSize: 14, lineHeight: 22, color: COLORS.onSurface },
+  instaCard: {
+    marginHorizontal: SPACING.lg,
+    marginTop: SPACING.lg,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: SPACING.md,
+    padding: SPACING.md,
+    backgroundColor: COLORS.surfaceSecondary,
+    borderRadius: RADIUS.md,
+    ...SHADOW.card,
+  },
+  instaIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#E1306C",
+  },
+  instaTitle: { fontSize: 14, fontWeight: "700", color: COLORS.navy },
+  instaSubtitle: { fontSize: 12, color: COLORS.onSurfaceMuted, marginTop: 2 },
 });

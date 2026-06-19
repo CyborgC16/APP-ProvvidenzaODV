@@ -10,6 +10,7 @@ import {
   KeyboardAvoidingView,
   Platform,
   RefreshControl,
+  Modal,
 } from "react-native";
 import { useRouter, useFocusEffect } from "expo-router";
 import { Image } from "expo-image";
@@ -19,10 +20,13 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { COLORS, SPACING, RADIUS, SHADOW, LOGO_URL } from "@/src/theme";
 import { useAuth } from "@/src/auth";
 import { api, Booking, Slot } from "@/src/api";
+import { useI18n } from "@/src/i18n";
+import LangToggle from "@/src/components/LangToggle";
 
 export default function Account() {
-  const { user, loading, logout, login } = useAuth();
+  const { user, loading, logout, login, refresh } = useAuth();
   const router = useRouter();
+  const { t } = useI18n();
 
   if (loading) {
     return (
@@ -34,11 +38,99 @@ export default function Account() {
 
   if (!user) return <LoginView onLogin={login} />;
 
+  // Force password change on first login
+  if (user.must_change_password) {
+    return <ForceChangePassword onDone={refresh} />;
+  }
+
   if (user.role === "master" || user.role === "admin") {
-    return <AdminDashboard onLogout={logout} role={user.role} onOpenUsers={() => router.push("/admin/users")} onNewSlot={() => router.push("/admin/slot-new")} fullName={user.full_name} />;
+    return (
+      <AdminDashboard
+        onLogout={logout}
+        role={user.role}
+        onOpenUsers={() => router.push("/admin/users")}
+        onNewSlot={() => router.push("/admin/slot-new")}
+        onNewShift={() => router.push("/admin/shift-new")}
+        fullName={user.full_name}
+      />
+    );
   }
 
   return <CivilServiceDashboard onLogout={logout} fullName={user.full_name} />;
+}
+
+// ===== FORCE CHANGE PASSWORD =====
+function ForceChangePassword({ onDone }: { onDone: () => Promise<void> }) {
+  const { t } = useI18n();
+  const [currentPw, setCurrentPw] = useState("");
+  const [newPw, setNewPw] = useState("");
+  const [confirmPw, setConfirmPw] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+
+  const submit = async () => {
+    setErr(null);
+    if (newPw.length < 6) return setErr(t("cp_short"));
+    if (newPw !== confirmPw) return setErr(t("cp_mismatch"));
+    setLoading(true);
+    try {
+      await api.changePassword(currentPw, newPw);
+      await onDone();
+    } catch (e: any) {
+      setErr(e.message || "Errore");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <SafeAreaView style={styles.safe} testID="force-change-password-screen">
+      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : "height"}>
+        <ScrollView contentContainerStyle={styles.loginScroll} keyboardShouldPersistTaps="handled">
+          <View style={styles.cpIconWrap}>
+            <Ionicons name="key" size={48} color={COLORS.brand} />
+          </View>
+          <Text style={styles.loginTitle}>{t("cp_title")}</Text>
+          <Text style={[styles.loginSubtitle, { marginBottom: SPACING.lg }]}>{t("cp_body")}</Text>
+
+          {err ? (
+            <View style={styles.errorBanner}>
+              <Ionicons name="alert-circle" size={18} color={COLORS.white} />
+              <Text style={styles.errorText}>{err}</Text>
+            </View>
+          ) : null}
+
+          <Text style={styles.fieldLabel}>{t("cp_current")}</Text>
+          <TextInput
+            testID="cp-current"
+            value={currentPw}
+            onChangeText={setCurrentPw}
+            secureTextEntry
+            style={styles.input}
+          />
+          <Text style={styles.fieldLabel}>{t("cp_new")}</Text>
+          <TextInput testID="cp-new" value={newPw} onChangeText={setNewPw} secureTextEntry style={styles.input} />
+          <Text style={styles.fieldLabel}>{t("cp_confirm")}</Text>
+          <TextInput
+            testID="cp-confirm"
+            value={confirmPw}
+            onChangeText={setConfirmPw}
+            secureTextEntry
+            style={styles.input}
+          />
+
+          <Pressable
+            testID="cp-submit"
+            onPress={submit}
+            disabled={loading || !currentPw || !newPw || !confirmPw}
+            style={[styles.primaryBtn, (!currentPw || !newPw || !confirmPw) && { opacity: 0.5 }]}
+          >
+            {loading ? <ActivityIndicator color={COLORS.white} /> : <Text style={styles.primaryBtnText}>{t("cp_submit")}</Text>}
+          </Pressable>
+        </ScrollView>
+      </KeyboardAvoidingView>
+    </SafeAreaView>
+  );
 }
 
 // ===== LOGIN =====
@@ -120,12 +212,14 @@ function AdminDashboard({
   role,
   onOpenUsers,
   onNewSlot,
+  onNewShift,
   fullName,
 }: {
   onLogout: () => Promise<void>;
   role: string;
   onOpenUsers: () => void;
   onNewSlot: () => void;
+  onNewShift: () => void;
   fullName: string;
 }) {
   const [date, setDate] = useState<string>(new Date().toISOString().slice(0, 10));
@@ -175,8 +269,12 @@ function AdminDashboard({
             Ruolo: <Text style={{ fontWeight: "700", color: COLORS.brand }}>{role.toUpperCase()}</Text>
           </Text>
         </View>
+        <LangToggle />
         <Pressable onPress={onOpenUsers} hitSlop={10} testID="open-users-btn" style={styles.iconBtn}>
           <Ionicons name="people" size={22} color={COLORS.navy} />
+        </Pressable>
+        <Pressable onPress={onNewShift} hitSlop={10} testID="new-shift-btn" style={styles.iconBtn}>
+          <Ionicons name="add-circle" size={22} color={COLORS.brand} />
         </Pressable>
         <Pressable onPress={onLogout} hitSlop={10} testID="logout-btn" style={styles.iconBtn}>
           <Ionicons name="log-out-outline" size={22} color={COLORS.navy} />
@@ -389,6 +487,7 @@ function formatLong(d: string) {
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: COLORS.surface },
   loginScroll: { padding: SPACING.xl, alignItems: "stretch", flexGrow: 1, justifyContent: "center" },
+  cpIconWrap: { alignSelf: "center", width: 88, height: 88, borderRadius: 44, backgroundColor: COLORS.brandLight, alignItems: "center", justifyContent: "center", marginBottom: SPACING.lg },
   loginLogo: { width: 120, height: 120, alignSelf: "center", marginBottom: SPACING.lg },
   loginTitle: { fontSize: 24, fontWeight: "700", color: COLORS.navy, textAlign: "center" },
   loginSubtitle: { fontSize: 13, color: COLORS.onSurfaceMuted, textAlign: "center", marginBottom: SPACING.xl },

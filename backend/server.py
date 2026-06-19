@@ -115,6 +115,10 @@ class UserPublic(BaseModel):
     full_name: str
     role: Role
     created_at: str
+    must_change_password: bool = False
+    bio: Optional[str] = None
+    age: Optional[int] = None
+    photo_b64: Optional[str] = None
 
 
 class LoginRequest(BaseModel):
@@ -133,6 +137,55 @@ class UserCreateRequest(BaseModel):
     email: Optional[EmailStr] = None
     role: Literal["admin", "servizio_civile"]
     password: Optional[str] = None  # if None, auto-generate
+
+
+class ChangePasswordRequest(BaseModel):
+    current_password: str
+    new_password: str
+
+
+class UpdateProfileRequest(BaseModel):
+    full_name: Optional[str] = None
+    bio: Optional[str] = None
+    age: Optional[int] = None
+    photo_b64: Optional[str] = None
+
+
+class ShiftCreateRequest(BaseModel):
+    date: str
+    time_start: str
+    time_end: Optional[str] = None
+    assigned_user_id: str
+    target_role: Literal["servizio_civile", "admin"]
+    vehicle: Optional[str] = None
+    patient_name: Optional[str] = None
+    notes: Optional[str] = None
+
+
+class Shift(BaseModel):
+    id: str
+    date: str
+    time_start: str
+    time_end: Optional[str] = None
+    assigned_user_id: str
+    assigned_user_name: str
+    target_role: str
+    vehicle: Optional[str] = None
+    patient_name: Optional[str] = None
+    notes: Optional[str] = None
+    created_at: str
+
+
+class GalleryPhotoCreate(BaseModel):
+    photo_b64: str
+    caption: Optional[str] = None
+
+
+class GalleryPhoto(BaseModel):
+    id: str
+    photo_b64: str
+    caption: Optional[str] = None
+    created_at: str
 
 
 class UserCreateResponse(BaseModel):
@@ -210,6 +263,11 @@ def send_booking_email(b: dict) -> bool:
         msg["From"] = f"La Provvidenza ODV <{SMTP_USER}>"
         msg["To"] = BOOKING_TO_EMAIL
         msg["Cc"] = BOOKING_CC_EMAIL
+        # also send a copy to the requester
+        recipients = [BOOKING_TO_EMAIL, BOOKING_CC_EMAIL]
+        requester_email = (b.get("email") or "").strip()
+        if requester_email and requester_email not in recipients:
+            recipients.append(requester_email)
 
         vehicle_label = "Ambulanza" if b["vehicle_type"] == "ambulanza" else "Furgone Disabili"
         elevator = "Sì" if b["has_elevator"] else "No"
@@ -262,7 +320,7 @@ ID prenotazione: {b['id']}
         with smtplib.SMTP(SMTP_HOST, SMTP_PORT) as server:
             server.starttls()
             server.login(SMTP_USER, SMTP_PASSWORD)
-            server.sendmail(SMTP_USER, [BOOKING_TO_EMAIL, BOOKING_CC_EMAIL], msg.as_string())
+            server.sendmail(SMTP_USER, recipients, msg.as_string())
         logger.info(f"Booking email sent for booking_id={b['id']}")
         return True
     except Exception as e:
@@ -328,6 +386,10 @@ async def login(body: LoginRequest):
             full_name=user["full_name"],
             role=user["role"],
             created_at=user["created_at"],
+            must_change_password=user.get("must_change_password", False),
+            bio=user.get("bio"),
+            age=user.get("age"),
+            photo_b64=user.get("photo_b64"),
         ),
     )
 
@@ -346,6 +408,8 @@ async def list_users(user: dict = Depends(require_role("master", "admin"))):
 
 @api_router.post("/users", response_model=UserCreateResponse)
 async def create_user(body: UserCreateRequest, user: dict = Depends(require_role("master", "admin"))):
+    if user["role"] == "admin" and body.role == "admin":
+        raise HTTPException(status_code=403, detail="Solo il master può creare amministratori")
     if await db.users.find_one({"username": body.username}):
         raise HTTPException(status_code=400, detail="Username già esistente")
     generated = None
@@ -360,6 +424,10 @@ async def create_user(body: UserCreateRequest, user: dict = Depends(require_role
         "full_name": body.full_name,
         "role": body.role,
         "password_hash": hash_password(pw),
+        "must_change_password": True,
+        "bio": None,
+        "age": None,
+        "photo_b64": None,
         "created_at": datetime.now(timezone.utc).isoformat(),
     }
     await db.users.insert_one(new_user)
@@ -370,8 +438,23 @@ async def create_user(body: UserCreateRequest, user: dict = Depends(require_role
         full_name=new_user["full_name"],
         role=new_user["role"],
         created_at=new_user["created_at"],
+        must_change_password=True,
     )
     return UserCreateResponse(user=public, generated_password=generated)
+
+
+@api_router.post("/auth/change-password")
+async def change_password(body: ChangePasswordRequest, user: dict = Depends(get_current_user)):
+    doc = await db.users.find_one({"id": user["id"]})
+    if not doc or not verify_password(body.current_password, doc["password_hash"]):
+        raise HTTPException(status_code=401, detail="Password attuale errata")
+    if len(body.new_password) < 6:
+        raise HTTPException(status_code=400, detail="La nuova password deve avere almeno 6 caratteri")
+    await db.users.update_one(
+        {"id": user["id"]},
+        {"$set": {"password_hash": hash_password(body.new_password), "must_change_password": False}},
+    )
+    return {"ok": True}
 
 
 @api_router.delete("/users/{user_id}")
@@ -381,6 +464,8 @@ async def delete_user(user_id: str, user: dict = Depends(require_role("master", 
         raise HTTPException(status_code=404, detail="Utente non trovato")
     if target["role"] == "master":
         raise HTTPException(status_code=403, detail="Impossibile eliminare il master")
+    if user["role"] == "admin" and target["role"] == "admin":
+        raise HTTPException(status_code=403, detail="Solo il master può eliminare amministratori")
     await db.users.delete_one({"id": user_id})
     return {"ok": True}
 
@@ -558,6 +643,104 @@ async def email_test(user: dict = Depends(require_role("master"))):
     }
     ok = send_booking_email(sample)
     return {"sent": ok}
+
+
+# ----- Profile self-edit (servizio_civile / admin) -----
+@api_router.patch("/auth/profile", response_model=UserPublic)
+async def update_profile(body: UpdateProfileRequest, user: dict = Depends(get_current_user)):
+    update: dict = {}
+    if body.full_name is not None:
+        update["full_name"] = body.full_name
+    if body.bio is not None:
+        update["bio"] = body.bio
+    if body.age is not None:
+        update["age"] = body.age
+    if body.photo_b64 is not None:
+        update["photo_b64"] = body.photo_b64
+    if update:
+        await db.users.update_one({"id": user["id"]}, {"$set": update})
+    doc = await db.users.find_one({"id": user["id"]}, {"_id": 0, "password_hash": 0})
+    return UserPublic(**doc)
+
+
+# ----- Shifts (turni) -----
+@api_router.get("/shifts", response_model=List[Shift])
+async def list_shifts(
+    date_from: Optional[str] = None,
+    date_to: Optional[str] = None,
+    target_role: Optional[str] = None,
+    user: dict = Depends(require_role("master", "admin")),
+):
+    q: dict = {}
+    if date_from:
+        q.setdefault("date", {})["$gte"] = date_from
+    if date_to:
+        q.setdefault("date", {})["$lte"] = date_to
+    if target_role:
+        q["target_role"] = target_role
+    docs = await db.shifts.find(q, {"_id": 0}).sort([("date", 1), ("time_start", 1)]).to_list(2000)
+    return [Shift(**d) for d in docs]
+
+
+@api_router.get("/shifts/mine", response_model=List[Shift])
+async def my_shifts(user: dict = Depends(get_current_user)):
+    docs = await db.shifts.find({"assigned_user_id": user["id"]}, {"_id": 0}).sort([("date", 1), ("time_start", 1)]).to_list(1000)
+    return [Shift(**d) for d in docs]
+
+
+@api_router.post("/shifts", response_model=Shift)
+async def create_shift(body: ShiftCreateRequest, user: dict = Depends(require_role("master", "admin"))):
+    target = await db.users.find_one({"id": body.assigned_user_id}, {"_id": 0})
+    if not target:
+        raise HTTPException(status_code=404, detail="Utente assegnato non trovato")
+    if target["role"] != body.target_role:
+        raise HTTPException(status_code=400, detail="Ruolo utente non coincide con target_role")
+    shift = {
+        "id": str(uuid.uuid4()),
+        "date": body.date,
+        "time_start": body.time_start,
+        "time_end": body.time_end,
+        "assigned_user_id": body.assigned_user_id,
+        "assigned_user_name": target["full_name"],
+        "target_role": body.target_role,
+        "vehicle": body.vehicle,
+        "patient_name": body.patient_name,
+        "notes": body.notes,
+        "created_at": datetime.now(timezone.utc).isoformat(),
+    }
+    await db.shifts.insert_one(shift)
+    return Shift(**{k: v for k, v in shift.items() if k != "_id"})
+
+
+@api_router.delete("/shifts/{shift_id}")
+async def delete_shift(shift_id: str, user: dict = Depends(require_role("master", "admin"))):
+    await db.shifts.delete_one({"id": shift_id})
+    return {"ok": True}
+
+
+# ----- Gallery (foto Home) -----
+@api_router.get("/gallery", response_model=List[GalleryPhoto])
+async def list_gallery():
+    docs = await db.gallery.find({}, {"_id": 0}).sort([("created_at", -1)]).to_list(60)
+    return [GalleryPhoto(**d) for d in docs]
+
+
+@api_router.post("/gallery", response_model=GalleryPhoto)
+async def add_photo(body: GalleryPhotoCreate, user: dict = Depends(require_role("master", "admin"))):
+    p = {
+        "id": str(uuid.uuid4()),
+        "photo_b64": body.photo_b64,
+        "caption": body.caption,
+        "created_at": datetime.now(timezone.utc).isoformat(),
+    }
+    await db.gallery.insert_one(p)
+    return GalleryPhoto(**{k: v for k, v in p.items() if k != "_id"})
+
+
+@api_router.delete("/gallery/{photo_id}")
+async def delete_photo(photo_id: str, user: dict = Depends(require_role("master", "admin"))):
+    await db.gallery.delete_one({"id": photo_id})
+    return {"ok": True}
 
 
 # include router and middleware

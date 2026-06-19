@@ -163,13 +163,15 @@ export default function UsersAdmin() {
                   Servizio Civile
                 </Text>
               </Pressable>
-              <Pressable
-                testID="role-admin"
-                onPress={() => setU((p) => ({ ...p, role: "admin" as any }))}
-                style={[styles.roleChip, u.role === "admin" && styles.roleChipSel]}
-              >
-                <Text style={[styles.roleChipText, u.role === "admin" && { color: COLORS.white }]}>Admin</Text>
-              </Pressable>
+              {user?.role === "master" && (
+                <Pressable
+                  testID="role-admin"
+                  onPress={() => setU((p) => ({ ...p, role: "admin" as any }))}
+                  style={[styles.roleChip, u.role === "admin" && styles.roleChipSel]}
+                >
+                  <Text style={[styles.roleChipText, u.role === "admin" && { color: COLORS.white }]}>Admin</Text>
+                </Pressable>
+              )}
             </View>
 
             <View style={{ flexDirection: "row", gap: SPACING.sm }}>

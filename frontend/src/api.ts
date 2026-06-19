@@ -11,6 +11,31 @@ export type UserPublic = {
   full_name: string;
   role: Role;
   created_at: string;
+  must_change_password?: boolean;
+  bio?: string | null;
+  age?: number | null;
+  photo_b64?: string | null;
+};
+
+export type Shift = {
+  id: string;
+  date: string;
+  time_start: string;
+  time_end?: string | null;
+  assigned_user_id: string;
+  assigned_user_name: string;
+  target_role: "servizio_civile" | "admin";
+  vehicle?: string | null;
+  patient_name?: string | null;
+  notes?: string | null;
+  created_at: string;
+};
+
+export type GalleryPhoto = {
+  id: string;
+  photo_b64: string;
+  caption?: string | null;
+  created_at: string;
 };
 
 export type Slot = {
@@ -89,6 +114,50 @@ export const api = {
   },
   async me() {
     return request<UserPublic>("/auth/me");
+  },
+  async changePassword(current_password: string, new_password: string) {
+    return request<{ ok: boolean }>("/auth/change-password", {
+      method: "POST",
+      body: JSON.stringify({ current_password, new_password }),
+    });
+  },
+  async updateProfile(body: { full_name?: string; bio?: string; age?: number; photo_b64?: string }) {
+    return request<UserPublic>("/auth/profile", { method: "PATCH", body: JSON.stringify(body) });
+  },
+
+  // Shifts
+  async listShifts(params: { date_from?: string; date_to?: string; target_role?: "servizio_civile" | "admin" }) {
+    const qs = new URLSearchParams(params as any).toString();
+    return request<Shift[]>(`/shifts${qs ? `?${qs}` : ""}`);
+  },
+  async myShifts() {
+    return request<Shift[]>("/shifts/mine");
+  },
+  async createShift(body: {
+    date: string;
+    time_start: string;
+    time_end?: string;
+    assigned_user_id: string;
+    target_role: "servizio_civile" | "admin";
+    vehicle?: string;
+    patient_name?: string;
+    notes?: string;
+  }) {
+    return request<Shift>("/shifts", { method: "POST", body: JSON.stringify(body) });
+  },
+  async deleteShift(id: string) {
+    return request<{ ok: boolean }>(`/shifts/${id}`, { method: "DELETE" });
+  },
+
+  // Gallery
+  async listGallery() {
+    return request<GalleryPhoto[]>("/gallery", { auth: false });
+  },
+  async addPhoto(photo_b64: string, caption?: string) {
+    return request<GalleryPhoto>("/gallery", { method: "POST", body: JSON.stringify({ photo_b64, caption }) });
+  },
+  async deletePhoto(id: string) {
+    return request<{ ok: boolean }>(`/gallery/${id}`, { method: "DELETE" });
   },
 
   // Users

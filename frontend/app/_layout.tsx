@@ -1,16 +1,16 @@
 import { Stack } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
+import * as NavigationBar from "expo-navigation-bar";
 import { useEffect } from "react";
+import { Platform } from "react-native";
 import { StatusBar } from "expo-status-bar";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
+import { SafeAreaProvider } from "react-native-safe-area-context";
 
 import { useIconFonts } from "@/src/hooks/use-icon-fonts";
 import { AuthProvider } from "@/src/auth";
+import { I18nProvider } from "@/src/i18n";
 
-// Keep the native splash visible from cold start until icon fonts register.
-// Required because @expo/vector-icons' componentDidMount fallback fires
-// Font.loadAsync against a broken vendor path if any <Icon> mounts before
-// the family is registered — which throws on Android Expo Go.
 SplashScreen.preventAutoHideAsync();
 
 export default function RootLayout() {
@@ -22,21 +22,32 @@ export default function RootLayout() {
     }
   }, [loaded, error]);
 
-  // If the CDN is unreachable we fall through on error rather than wedging
-  // the app — icons will tofu, but the app still boots.
+  // Hide Android navigation bar so it doesn't overlap our tab bar
+  useEffect(() => {
+    if (Platform.OS === "android") {
+      NavigationBar.setVisibilityAsync("hidden").catch(() => {});
+      NavigationBar.setBehaviorAsync("overlay-swipe").catch(() => {});
+    }
+  }, []);
+
   if (!loaded && !error) return null;
 
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
-      <AuthProvider>
-        <StatusBar style="dark" />
-        <Stack screenOptions={{ headerShown: false }}>
-          <Stack.Screen name="index" />
-          <Stack.Screen name="(tabs)" />
-          <Stack.Screen name="admin/users" />
-          <Stack.Screen name="admin/slot-new" options={{ presentation: "modal" }} />
-        </Stack>
-      </AuthProvider>
+      <SafeAreaProvider>
+        <I18nProvider>
+          <AuthProvider>
+            <StatusBar style="dark" />
+            <Stack screenOptions={{ headerShown: false }}>
+              <Stack.Screen name="index" />
+              <Stack.Screen name="(tabs)" />
+              <Stack.Screen name="admin/users" />
+              <Stack.Screen name="admin/slot-new" options={{ presentation: "modal" }} />
+              <Stack.Screen name="admin/shift-new" options={{ presentation: "modal" }} />
+            </Stack>
+          </AuthProvider>
+        </I18nProvider>
+      </SafeAreaProvider>
     </GestureHandlerRootView>
   );
 }
