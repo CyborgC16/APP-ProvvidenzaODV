@@ -135,7 +135,7 @@ class UserCreateRequest(BaseModel):
     username: str
     full_name: str
     email: Optional[EmailStr] = None
-    role: Literal["admin", "servizio_civile"]
+    role: Literal["admin", "servizio_civile", "master"]
     password: Optional[str] = None  # if None, auto-generate
 
 
@@ -381,13 +381,13 @@ ID prenotazione: {b['id']}
 async def seed_master():
     existing = await db.users.find_one({"role": "master"})
     if existing:
-        # ensure master credentials match env
+        # keep username/full_name in sync with env but DO NOT reset password
+        # (master may have changed their password via /auth/change-password)
         await db.users.update_one(
             {"role": "master"},
             {"$set": {
                 "username": MASTER_USERNAME,
-                "password_hash": hash_password(MASTER_PASSWORD),
-                "full_name": "Master Admin",
+                "full_name": existing.get("full_name") or "Master Admin",
             }},
         )
         return
@@ -451,14 +451,21 @@ async def me(user: dict = Depends(get_current_user)):
 # ----- Users management (master/admin) -----
 @api_router.get("/users", response_model=List[UserPublic])
 async def list_users(user: dict = Depends(require_role("master", "admin"))):
-    docs = await db.users.find({"role": {"$ne": "master"}}, {"_id": 0, "password_hash": 0}).to_list(500)
+    # master sees all (including other masters); admin doesn't see master accounts
+    if user["role"] == "master":
+        q = {}
+    else:
+        q = {"role": {"$ne": "master"}}
+    docs = await db.users.find(q, {"_id": 0, "password_hash": 0}).to_list(500)
     return [UserPublic(**d) for d in docs]
 
 
 @api_router.post("/users", response_model=UserCreateResponse)
 async def create_user(body: UserCreateRequest, user: dict = Depends(require_role("master", "admin"))):
-    if user["role"] == "admin" and body.role == "admin":
-        raise HTTPException(status_code=403, detail="Solo il master può creare amministratori")
+    # Only master can create master accounts
+    if body.role == "master" and user["role"] != "master":
+        raise HTTPException(status_code=403, detail="Solo il master può creare altri master")
+    # admin can create admin (volontari) and servizio_civile - allowed
     if await db.users.find_one({"username": body.username}):
         raise HTTPException(status_code=400, detail="Username già esistente")
     generated = None
@@ -511,10 +518,8 @@ async def delete_user(user_id: str, user: dict = Depends(require_role("master", 
     target = await db.users.find_one({"id": user_id})
     if not target:
         raise HTTPException(status_code=404, detail="Utente non trovato")
-    if target["role"] == "master":
-        raise HTTPException(status_code=403, detail="Impossibile eliminare il master")
-    if user["role"] == "admin" and target["role"] == "admin":
-        raise HTTPException(status_code=403, detail="Solo il master può eliminare amministratori")
+    if target["role"] == "master" and user["role"] != "master":
+        raise HTTPException(status_code=403, detail="Solo il master può eliminare un master")
     await db.users.delete_one({"id": user_id})
     return {"ok": True}
 

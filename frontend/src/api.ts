@@ -246,7 +246,7 @@ export const api = {
     username: string;
     full_name: string;
     email?: string;
-    role: "admin" | "servizio_civile";
+    role: "admin" | "servizio_civile" | "master";
     password?: string;
   }) {
     return request<{ user: UserPublic; generated_password?: string }>("/users", {

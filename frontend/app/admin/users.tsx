@@ -27,7 +27,7 @@ export default function UsersAdmin() {
   const [showCreate, setShowCreate] = useState(false);
   const [newPwModal, setNewPwModal] = useState<{ username: string; pw: string } | null>(null);
 
-  const [u, setU] = useState({ username: "", full_name: "", email: "", role: "servizio_civile" as const });
+  const [u, setU] = useState({ username: "", full_name: "", email: "", role: "servizio_civile" as "servizio_civile" | "admin" | "master" });
   const [creating, setCreating] = useState(false);
   const [createErr, setCreateErr] = useState<string | null>(null);
 
@@ -105,7 +105,7 @@ export default function UsersAdmin() {
               <View style={{ flex: 1 }}>
                 <Text style={styles.userName}>{usr.full_name}</Text>
                 <Text style={styles.userMeta}>
-                  @{usr.username} · {usr.role === "admin" ? "Volontario" : "Servizio Civile"}
+                  @{usr.username} · {usr.role === "admin" ? "Volontario" : usr.role === "master" ? "Master" : "Servizio Civile"}
                 </Text>
                 {usr.email ? <Text style={styles.userMeta}>{usr.email}</Text> : null}
               </View>
@@ -153,7 +153,7 @@ export default function UsersAdmin() {
               style={styles.input}
             />
             <Text style={styles.fieldLabel}>Ruolo</Text>
-            <View style={{ flexDirection: "row", gap: SPACING.sm, marginBottom: SPACING.md }}>
+            <View style={{ flexDirection: "row", gap: SPACING.sm, marginBottom: SPACING.md, flexWrap: "wrap" }}>
               <Pressable
                 testID="role-sc"
                 onPress={() => setU((p) => ({ ...p, role: "servizio_civile" }))}
@@ -163,13 +163,20 @@ export default function UsersAdmin() {
                   Servizio Civile
                 </Text>
               </Pressable>
+              <Pressable
+                testID="role-vol"
+                onPress={() => setU((p) => ({ ...p, role: "admin" }))}
+                style={[styles.roleChip, u.role === "admin" && styles.roleChipSel]}
+              >
+                <Text style={[styles.roleChipText, u.role === "admin" && { color: COLORS.white }]}>Volontario</Text>
+              </Pressable>
               {user?.role === "master" && (
                 <Pressable
-                  testID="role-admin"
-                  onPress={() => setU((p) => ({ ...p, role: "admin" as any }))}
-                  style={[styles.roleChip, u.role === "admin" && styles.roleChipSel]}
+                  testID="role-master"
+                  onPress={() => setU((p) => ({ ...p, role: "master" }))}
+                  style={[styles.roleChip, u.role === "master" && styles.roleChipSel]}
                 >
-                  <Text style={[styles.roleChipText, u.role === "admin" && { color: COLORS.white }]}>Volontario</Text>
+                  <Text style={[styles.roleChipText, u.role === "master" && { color: COLORS.white }]}>Master</Text>
                 </Pressable>
               )}
             </View>
