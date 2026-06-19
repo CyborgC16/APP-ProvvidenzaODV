@@ -1,0 +1,39 @@
+{
+  "summary": "Backend pytest suite (15/15 passed) covers all requested endpoints: health, master login + 401 wrong creds, /auth/me, user CRUD + generated_password, list users excludes master and _id, reset-password rotation + login with new pw, master self-protection (reset 403 and delete 403), slot create/list (public, no _id), /slots/mine for servizio_civile, public booking creation that decrements capacity and returns 400 when full, admin booking listing + 401 unauthenticated, booking deletion restores booked_count. Frontend (Expo web @ mobile viewport 390x844) loads Home (hero, servizi, quick links, about, bottom tabs), Account tab shows Area Riservata login form, master login (CyborgC17/Benito99.) succeeds and dashboard renders 'Ciao, Master Admin', 'Ruolo: MASTER', date strip, Slot (0), Prenotazioni (0), and FAB (+). Prenota tab step 1 (Tipo di Mezzo: Ambulanza/Furgone) renders with 1/3 indicator and Continua button. No page errors. Minor non-fatal warnings only.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "global", "issues": ["Console warning: \"shadow*\" style props deprecated → use boxShadow", "Console warning: props.pointerEvents is deprecated → use style.pointerEvents", "Console warning: Animated useNativeDriver not supported on web (JS fallback) — harmless on web build"]}
+    ],
+    "react_native_issues": [
+      {"component": "expo-router root layout", "issue": "Warning: [Layout children]: No route named 'login' exists in nested children: [index, (tabs), admin/slot-new, admin/users]. A <Stack.Screen name=\"login\"/> is declared somewhere but the route file is missing (or vice-versa). Non-fatal, but should be cleaned up."}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_provvidenza_api.py",
+    "/app/test_reports/pytest/pytest_results.xml"
+  ],
+  "action_items": [
+    "Optional: replace deprecated shadow* props with boxShadow and props.pointerEvents with style.pointerEvents to silence React Native Web warnings.",
+    "Optional: remove the stray 'login' Stack.Screen reference (or add the matching route) in the root _layout.tsx to eliminate the expo-router warning."
+  ],
+  "critical_code_review_comments": [
+    "server.py is a single ~570-line file — acceptable for current scope but consider splitting into routers/auth.py, routers/users.py, routers/slots.py, routers/bookings.py if growth continues.",
+    "All Mongo reads correctly project out _id. ",
+    "Master credentials are re-seeded on every startup (idempotent) — good.",
+    "Bookings POST has no rate-limit / captcha — public endpoint could be abused; not in scope but worth noting.",
+    "SMTP credentials are stored in plaintext in backend/.env (expected for this environment)."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_provvidenza_api.py (new)",
+    "/app/test_reports/pytest/pytest_results.xml (new)"
+  ],
+  "success_rate": {"backend": "100% (15/15)", "frontend": "100% on smoke flows tested (home, account login, master dashboard, prenota step 1)"},
+  "seed_data_creation": "Tests create TEST_sc_* user + TEST slot + a booking, all cleaned up via fixtures. Master account is auto-seeded by backend.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Backend BASE URL: https://servizio-civile-app.preview.emergentagent.com. Master creds: CyborgC17 / Benito99. (note trailing dot). Re-run pytest with `EXPO_BACKEND_URL=... pytest /app/backend/tests/test_provvidenza_api.py -v`. For frontend, use mobile viewport 390x844 and navigate via tab bar text labels (Home, Prenota, Servizio Civile, Volontari, Account). Booking step 2/3 and the admin slot-creation FAB modal + user-creation modal were NOT exercised end-to-end (only confirmed they open). Recommend deeper E2E for booking create through UI and admin user creation modal in a future iteration.",
+  "rca_of_issue": "N/A — no bugs found."
+}
