@@ -6,7 +6,7 @@ import { LinearGradient } from "expo-linear-gradient";
 import { Ionicons } from "@expo/vector-icons";
 import { SafeAreaView } from "react-native-safe-area-context";
 
-import { COLORS, SPACING, RADIUS, SHADOW, LOGO_URL, HERO_IMAGE, AMBULANCE_IMAGE, CIVIL_SERVICE_IMAGE } from "@/src/theme";
+import { COLORS, SPACING, RADIUS, SHADOW, LOGO_URL, HERO_IMAGE, AMBULANCE_IMAGE, CIVIL_SERVICE_IMAGE, ABOUT_IMAGE, SERVICES_IMAGE } from "@/src/theme";
 import { useI18n } from "@/src/i18n";
 import LangToggle from "@/src/components/LangToggle";
 import { api, GalleryPhoto } from "@/src/api";
@@ -35,7 +35,8 @@ export default function Home() {
     return () => clearInterval(interval);
   }, [photos.length]);
 
-  const itemWidth = Math.min(width - SPACING.lg * 2, 360);
+  const itemWidth = Math.min(width - SPACING.lg * 2, 320);
+  const itemHeight = Math.round(itemWidth * 0.62);
 
   return (
     <SafeAreaView style={styles.safe} edges={["top"]} testID="home-screen">
@@ -90,6 +91,13 @@ export default function Home() {
 
         {/* Services */}
         <Text style={styles.sectionTitle}>I Nostri Servizi</Text>
+        <Pressable
+          onPress={() => router.push("/(tabs)/prenota")}
+          style={styles.servicesBanner}
+          testID="services-banner"
+        >
+          <Image source={{ uri: SERVICES_IMAGE }} style={styles.servicesBannerImage} contentFit="contain" />
+        </Pressable>
         <View style={styles.servicesRow}>
           <View style={styles.serviceCard} testID="service-emodialisi">
             <View style={[styles.iconBubble, { backgroundColor: COLORS.brandLight }]}>
@@ -113,11 +121,12 @@ export default function Home() {
           <Pressable
             testID="link-servizio-civile"
             onPress={() => router.push("/(tabs)/servizio-civile")}
-            style={styles.linkCard}
+            style={[styles.linkCard, { backgroundColor: COLORS.white }]}
           >
-            <Image source={{ uri: CIVIL_SERVICE_IMAGE }} style={StyleSheet.absoluteFill} contentFit="cover" />
-            <LinearGradient colors={["transparent", "rgba(0,0,0,0.7)"]} style={StyleSheet.absoluteFill} />
-            <Text style={styles.linkLabel}>Servizio Civile</Text>
+            <Image source={{ uri: CIVIL_SERVICE_IMAGE }} style={styles.linkCardLogo} contentFit="contain" />
+            <View style={styles.linkLabelBar}>
+              <Text style={styles.linkLabel}>Servizio Civile</Text>
+            </View>
           </Pressable>
           <Pressable
             testID="link-volontari"
@@ -144,15 +153,15 @@ export default function Home() {
               snapToInterval={itemWidth + SPACING.md}
               decelerationRate="fast"
               renderItem={({ item }) => (
-                <View style={[styles.galleryCard, { width: itemWidth }]} testID={`gallery-${item.id}`}>
+                <View style={[styles.galleryCard, { width: itemWidth, height: itemHeight }]} testID={`gallery-${item.id}`}>
                   <Image source={{ uri: item.photo_b64 }} style={StyleSheet.absoluteFill} contentFit="cover" />
                   {item.caption ? (
                     <LinearGradient
-                      colors={["transparent", "rgba(0,0,0,0.7)"]}
-                      style={[StyleSheet.absoluteFill, { top: undefined, height: 80 }]}
+                      colors={["transparent", "rgba(0,0,0,0.75)"]}
+                      style={[StyleSheet.absoluteFill, { top: undefined, height: 70 }]}
                     />
                   ) : null}
-                  {item.caption ? <Text style={styles.galleryCaption}>{item.caption}</Text> : null}
+                  {item.caption ? <Text style={styles.galleryCaption} numberOfLines={2}>{item.caption}</Text> : null}
                 </View>
               )}
               getItemLayout={(_, i) => ({ length: itemWidth + SPACING.md, offset: (itemWidth + SPACING.md) * i, index: i })}
@@ -161,15 +170,8 @@ export default function Home() {
         )}
 
         {/* About */}
-        <View style={styles.aboutCard}>
-          <Text style={styles.aboutTitle}>Chi Siamo</Text>
-          <Text style={styles.aboutBody}>
-            La Provvidenza ODV è un&apos;associazione di volontariato di pubblica assistenza con sede a Marsala,
-            affiliata ANPAS. Offriamo servizi di trasporto sanitario per pazienti emodializzati e
-            trasporto disabili in carrozzina con ambulanze e furgoni attrezzati. {`\n\n`}
-            Grazie alla nostra rete di volontari e ragazzi del Servizio Civile garantiamo un servizio
-            puntuale, gratuito e di qualità a tutta la comunità.
-          </Text>
+        <View style={styles.aboutCard} testID="about-card">
+          <Image source={{ uri: ABOUT_IMAGE }} style={styles.aboutImage} contentFit="contain" />
         </View>
 
         <View style={{ height: SPACING.xl }} />
@@ -251,17 +253,52 @@ const styles = StyleSheet.create({
     padding: SPACING.md,
     ...SHADOW.card,
   },
+  linkCardLogo: { width: "100%", height: "100%", position: "absolute", top: 8, left: 0 },
   linkLabel: { color: COLORS.white, fontWeight: "700", fontSize: 15 },
+  linkLabelBar: {
+    position: "absolute",
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: COLORS.brand,
+    paddingVertical: 8,
+    alignItems: "center",
+  },
+  servicesBanner: {
+    marginHorizontal: SPACING.lg,
+    borderRadius: RADIUS.md,
+    overflow: "hidden",
+    marginBottom: SPACING.md,
+    backgroundColor: COLORS.surfaceSecondary,
+    ...SHADOW.card,
+  },
+  servicesBannerImage: { width: "100%", aspectRatio: 1, backgroundColor: COLORS.surfaceSecondary },
   aboutCard: {
     marginHorizontal: SPACING.lg,
     marginTop: SPACING.xl,
     backgroundColor: COLORS.surfaceSecondary,
     borderRadius: RADIUS.md,
-    padding: SPACING.lg,
+    overflow: "hidden",
     ...SHADOW.card,
   },
+  aboutImage: { width: "100%", aspectRatio: 1, backgroundColor: COLORS.surfaceSecondary },
   aboutTitle: { fontSize: 17, fontWeight: "700", color: COLORS.navy, marginBottom: SPACING.sm },
   aboutBody: { fontSize: 14, lineHeight: 22, color: COLORS.onSurface },
+  galleryCard: {
+    borderRadius: RADIUS.md,
+    overflow: "hidden",
+    backgroundColor: COLORS.surfaceTertiary,
+    ...SHADOW.card,
+  },
+  galleryCaption: {
+    position: "absolute",
+    left: SPACING.md,
+    right: SPACING.md,
+    bottom: SPACING.md,
+    color: COLORS.white,
+    fontSize: 13,
+    fontWeight: "600",
+  },
   instaCard: {
     marginHorizontal: SPACING.lg,
     marginTop: SPACING.lg,

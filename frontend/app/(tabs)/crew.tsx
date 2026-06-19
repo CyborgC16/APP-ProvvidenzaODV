@@ -11,6 +11,7 @@ import { storage } from "@/src/utils/storage";
 import { TOKEN_KEY } from "@/src/api";
 import LangToggle from "@/src/components/LangToggle";
 import CrewMap from "@/src/components/CrewMap";
+import CrewMapFallback from "@/src/components/CrewMap.web";
 
 const BACKEND = process.env.EXPO_PUBLIC_BACKEND_URL;
 const POPUP_KEY = "crew_popup_seen_v1";
@@ -28,7 +29,8 @@ type Pos = {
 export default function Crew() {
   const router = useRouter();
   const { user, loading: authLoading } = useAuth();
-  const [popupVisible, setPopupVisible] = useState(false);
+  const [popupVisible, setPopupVisible] = useState(true);
+  const [permissionAsked, setPermissionAsked] = useState(false);
   const [sharing, setSharing] = useState(false);
   const [permission, setPermission] = useState<"unknown" | "granted" | "denied">("unknown");
   const [myPos, setMyPos] = useState<{ latitude: number; longitude: number } | null>(null);
@@ -37,11 +39,26 @@ export default function Crew() {
   const wsRef = useRef<WebSocket | null>(null);
   const watcherRef = useRef<Location.LocationSubscription | null>(null);
 
+  // Show popup every time the screen is opened (request permission flow)
   useEffect(() => {
-    storage.getItem<boolean>(POPUP_KEY, false).then((seen) => {
-      if (!seen) setPopupVisible(true);
-    });
+    setPopupVisible(true);
+    setPermissionAsked(false);
   }, []);
+
+  const requestPermissionAndOpen = async () => {
+    setPermissionAsked(true);
+    try {
+      let { status } = await Location.getForegroundPermissionsAsync();
+      if (status !== "granted") {
+        const req = await Location.requestForegroundPermissionsAsync();
+        status = req.status;
+      }
+      setPermission(status === "granted" ? "granted" : "denied");
+    } catch {
+      setPermission("denied");
+    }
+    setPopupVisible(false);
+  };
 
   const dismissPopup = async () => {
     await storage.setItem(POPUP_KEY, true);
@@ -171,26 +188,43 @@ export default function Crew() {
 
       <View style={{ flex: 1 }}>
         {loading && positions.length === 0 ? <ActivityIndicator color={COLORS.brand} style={{ marginTop: 30 }} /> : null}
-        <CrewMap positions={positions} myPos={myPos} />
+        {/* Render the map ONLY after the permission flow has been resolved.
+            If permission denied, use the list fallback to avoid native crashes. */}
+        {!permissionAsked ? (
+          <View style={styles.gateWrap}>
+            <Ionicons name="lock-closed" size={42} color={COLORS.onSurfaceMuted} />
+            <Text style={styles.gateText}>In attesa del consenso posizione…</Text>
+          </View>
+        ) : permission === "denied" ? (
+          <ScrollView>
+            <View style={styles.warn}>
+              <Ionicons name="information-circle" size={18} color={COLORS.warning} />
+              <Text style={styles.warnText}>Mappa disattivata. Visualizzazione a lista.</Text>
+            </View>
+            <CrewMapFallback positions={positions} myPos={myPos} />
+          </ScrollView>
+        ) : (
+          <CrewMap positions={positions} myPos={myPos} />
+        )}
       </View>
 
-      <Modal visible={popupVisible} animationType="fade" transparent onRequestClose={dismissPopup}>
+      <Modal visible={popupVisible} animationType="fade" transparent onRequestClose={() => { dismissPopup(); router.back(); }}>
         <View style={styles.modalWrap}>
           <View style={styles.modalCard}>
             <Ionicons name="location" size={48} color={COLORS.brand} style={{ alignSelf: "center" }} />
             <Text style={styles.modalTitle}>Crew · Posizione</Text>
             <Text style={styles.modalBody}>
               Questa pagina è dedicata ai nostri volontari per coordinarsi con i servizi di emodialisi.{"\n\n"}
-              L&apos;accesso alla posizione <Text style={{ fontWeight: "700" }}>non è obbligatorio</Text> e
-              comunque verrà disattivato quando chiudi l&apos;app.{"\n\n"}
-              Se non vuoi partecipare, torna semplicemente indietro.
+              Per visualizzare la mappa è necessario il <Text style={{ fontWeight: "700" }}>permesso posizione</Text>.
+              Se neghi il permesso, vedrai comunque la lista degli operatori online.{"\n\n"}
+              La condivisione della tua posizione si disattiva quando chiudi l&apos;app.
             </Text>
             <View style={{ flexDirection: "row", gap: SPACING.sm, marginTop: SPACING.md }}>
               <Pressable onPress={() => { dismissPopup(); router.back(); }} style={[styles.btn, styles.btnSec]} testID="crew-popup-back">
                 <Text style={styles.btnSecText}>Indietro</Text>
               </Pressable>
-              <Pressable onPress={dismissPopup} style={[styles.btn, styles.btnPri]} testID="crew-popup-ok">
-                <Text style={styles.btnPriText}>Ho capito</Text>
+              <Pressable onPress={requestPermissionAndOpen} style={[styles.btn, styles.btnPri]} testID="crew-popup-ok">
+                <Text style={styles.btnPriText}>Consenti posizione</Text>
               </Pressable>
             </View>
           </View>
@@ -221,4 +255,6 @@ const styles = StyleSheet.create({
   btnPriText: { color: COLORS.white, fontWeight: "700" },
   btnSec: { backgroundColor: COLORS.surfaceTertiary },
   btnSecText: { color: COLORS.navy, fontWeight: "600" },
+  gateWrap: { flex: 1, alignItems: "center", justifyContent: "center", gap: SPACING.sm, padding: SPACING.xl },
+  gateText: { fontSize: 14, color: COLORS.onSurfaceMuted, textAlign: "center" },
 });

@@ -68,11 +68,22 @@ export const SHADOW = {
 export const LOGO_URL =
   "https://customer-assets.emergentagent.com/job_6ff22b11-31a6-448a-bcd0-492ab14ab6b8/artifacts/qkyr1ljo_LOGO%20FINALE.png";
 
+// Hero principale (schermata home) - ambulanza notturna La Provvidenza
 export const HERO_IMAGE =
-  "https://images.unsplash.com/photo-1765233181361-a11f1e5b3c69?crop=entropy&cs=srgb&fm=jpg&ixid=M3w3NDk1NzZ8MHwxfHNlYXJjaHwxfHxpdGFsaWFuJTIwYW1idWxhbmNlJTIwdm9sdW50ZWVyc3xlbnwwfHx8fDE3ODE4MjY2NDB8MA&ixlib=rb-4.1.0&q=85";
+  "https://customer-assets.emergentagent.com/job_servizio-civile-app/artifacts/1l3eqhz3_ChatGPT%20Image%2029%20set%202025%2C%2015_48_09.png";
 
+// I Nostri Volontari - operatrice davanti ambulanza
 export const AMBULANCE_IMAGE =
-  "https://images.pexels.com/photos/36756313/pexels-photo-36756313.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940";
+  "https://customer-assets.emergentagent.com/job_servizio-civile-app/artifacts/1y3dzyqi_20250908_085113.jpg";
 
+// Servizio Civile - logo SCU
 export const CIVIL_SERVICE_IMAGE =
-  "https://images.unsplash.com/photo-1758599667729-a6f0f8bd213b?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NTYxODh8MHwxfHNlYXJjaHwyfHx5b3VuZyUyMGNpdmlsJTIwc2VydmljZSUyMHZvbHVudGVlcnMlMjB3b3JraW5nfGVufDB8fHx8MTc4MTgyNjY0MHww&ixlib=rb-4.1.0&q=85";
+  "https://customer-assets.emergentagent.com/job_servizio-civile-app/artifacts/zm7kc7p2_servizio_civile_universale_logo.png";
+
+// Chi Siamo - sfondo gruppo associazione
+export const ABOUT_IMAGE =
+  "https://customer-assets.emergentagent.com/job_servizio-civile-app/artifacts/9e1336w2_La-provvidenza-1920-x-529-px-1080-x-1920-px.png";
+
+// Servizi - sfondo parco auto
+export const SERVICES_IMAGE =
+  "https://customer-assets.emergentagent.com/job_servizio-civile-app/artifacts/qwk7hatz_La-provvidenza-1920-x-529-px-1080-x-1920-px-1.png";
