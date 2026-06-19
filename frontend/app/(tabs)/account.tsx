@@ -286,7 +286,9 @@ function AdminDashboard({
         <QuickBtn icon="people" label="Utenti" onPress={onOpenUsers} testID="open-users-btn" />
         <QuickBtn icon="add-circle" label="Nuovo Slot" onPress={onNewSlot} testID="new-slot-btn-q" />
         <QuickBtn icon="time" label="Nuovo Turno" onPress={onNewShift} testID="new-shift-btn" />
+        <QuickBtn icon="list" label="Tutti i Turni" onPress={() => router.push("/admin/shifts")} testID="open-shifts" />
         <QuickBtn icon="medkit" label="Pz Dializzati" onPress={() => router.push("/admin/patients")} testID="open-patients" />
+        <QuickBtn icon="car" label="Garage" onPress={() => router.push("/admin/garage")} testID="open-garage" />
         <QuickBtn icon="images" label="Foto" onPress={() => router.push("/admin/photos")} testID="open-photos" />
       </ScrollView>
 

@@ -9,6 +9,7 @@ import { api, Shift } from "@/src/api";
 import { useAuth } from "@/src/auth";
 import { useI18n } from "@/src/i18n";
 import LangToggle from "@/src/components/LangToggle";
+import { exportShiftToCalendar } from "@/src/utils/calendar-export";
 
 export default function Turni() {
   const router = useRouter();
@@ -98,6 +99,9 @@ export default function Turni() {
                       </Text>
                     ) : null}
                   </View>
+                  <Pressable onPress={() => exportShiftToCalendar(s)} testID={`export-${s.id}`} style={styles.exportBtn}>
+                    <Ionicons name="calendar-outline" size={18} color={COLORS.brand} />
+                  </Pressable>
                 </View>
               ))}
             </View>
@@ -150,4 +154,5 @@ const styles = StyleSheet.create({
   cardTitle: { fontSize: 15, fontWeight: "700", color: COLORS.navy },
   cardLine: { fontSize: 13, color: COLORS.onSurface, marginTop: 2 },
   cardNotes: { fontSize: 12, color: COLORS.onSurfaceMuted, marginTop: 4, fontStyle: "italic" },
+  exportBtn: { padding: 8, borderRadius: RADIUS.sm, backgroundColor: COLORS.brandLight },
 });

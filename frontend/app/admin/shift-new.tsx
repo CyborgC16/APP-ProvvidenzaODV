@@ -15,26 +15,29 @@ import { Ionicons } from "@expo/vector-icons";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { COLORS, SPACING, RADIUS, SHADOW } from "@/src/theme";
-import { api, UserPublic } from "@/src/api";
+import { api, UserPublic, Vehicle } from "@/src/api";
+import DatePickerField, { TimePickerField } from "@/src/components/DatePickerField";
 
 export default function NewShift() {
   const router = useRouter();
   const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
   const [timeStart, setTimeStart] = useState("08:00");
-  const [timeEnd, setTimeEnd] = useState("");
+  const [timeEnd, setTimeEnd] = useState("12:00");
   const [targetRole, setTargetRole] = useState<"servizio_civile" | "admin">("servizio_civile");
-  const [vehicle, setVehicle] = useState("");
+  const [vehicleId, setVehicleId] = useState<string>("");
   const [patientName, setPatientName] = useState("");
   const [notes, setNotes] = useState("");
   const [assignedUserId, setAssignedUserId] = useState<string>("");
   const [users, setUsers] = useState<UserPublic[]>([]);
+  const [vehicles, setVehicles] = useState<Vehicle[]>([]);
   const [submitting, setSubmitting] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     try {
-      const list = await api.listUsers();
-      setUsers(list);
+      const [u, v] = await Promise.all([api.listUsers(), api.listVehicles().catch(() => [])]);
+      setUsers(u);
+      setVehicles(v);
     } catch {}
   }, []);
   useEffect(() => {
@@ -52,13 +55,14 @@ export default function NewShift() {
     setSubmitting(true);
     setErr(null);
     try {
+      const vehicleLabel = vehicles.find((v) => v.id === vehicleId)?.name;
       await api.createShift({
         date,
         time_start: timeStart,
         time_end: timeEnd || undefined,
         assigned_user_id: assignedUserId,
         target_role: targetRole,
-        vehicle: vehicle || undefined,
+        vehicle: vehicleLabel,
         patient_name: patientName || undefined,
         notes: notes || undefined,
       });
@@ -100,37 +104,52 @@ export default function NewShift() {
               onPress={() => setTargetRole("admin")}
               style={[styles.chip, targetRole === "admin" && styles.chipSel]}
             >
-              <Text style={[styles.chipText, targetRole === "admin" && { color: COLORS.white }]}>Admin</Text>
+              <Text style={[styles.chipText, targetRole === "admin" && { color: COLORS.white }]}>Volontari</Text>
             </Pressable>
           </View>
 
-          <Text style={styles.label}>Data (AAAA-MM-GG)</Text>
-          <TextInput value={date} onChangeText={setDate} style={styles.input} autoCapitalize="none" testID="shift-date" />
-
+          <DatePickerField label="Data" value={date} onChange={setDate} testID="shift-date" />
           <View style={styles.row}>
             <View style={{ flex: 1 }}>
-              <Text style={styles.label}>Inizio (HH:MM)</Text>
-              <TextInput value={timeStart} onChangeText={setTimeStart} style={styles.input} testID="shift-time-start" />
+              <TimePickerField label="Inizio" value={timeStart} onChange={setTimeStart} testID="shift-time-start" />
             </View>
             <View style={{ flex: 1 }}>
-              <Text style={styles.label}>Fine (HH:MM)</Text>
-              <TextInput value={timeEnd} onChangeText={setTimeEnd} style={styles.input} testID="shift-time-end" />
+              <TimePickerField label="Fine" value={timeEnd} onChange={setTimeEnd} testID="shift-time-end" />
             </View>
           </View>
 
-          <Text style={styles.label}>Auto / Mezzo assegnato</Text>
-          <TextInput
-            value={vehicle}
-            onChangeText={setVehicle}
-            style={styles.input}
-            placeholder="es. Ambulanza 1 / Furgone Targa AB123CD"
-            placeholderTextColor={COLORS.onSurfaceMuted}
-            testID="shift-vehicle"
-          />
+          <Text style={styles.label}>Mezzo assegnato (dal Garage)</Text>
+          {vehicles.length === 0 ? (
+            <Text style={styles.muted}>
+              Nessun mezzo nel Garage. Aggiungili dalla sezione Garage.
+            </Text>
+          ) : (
+            <View style={{ marginBottom: SPACING.sm }}>
+              {vehicles.map((v) => {
+                const sel = vehicleId === v.id;
+                return (
+                  <Pressable
+                    key={v.id}
+                    testID={`vehicle-pick-${v.id}`}
+                    onPress={() => setVehicleId(sel ? "" : v.id)}
+                    style={[styles.vrow, sel && styles.vrowSel]}
+                  >
+                    <Ionicons
+                      name={sel ? "radio-button-on" : "radio-button-off"}
+                      size={20}
+                      color={sel ? COLORS.brand : COLORS.onSurfaceMuted}
+                    />
+                    <Text style={styles.vrowText}>
+                      {v.name}
+                      {v.plate ? ` · ${v.plate}` : ""}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </View>
+          )}
 
-          <Text style={styles.label}>
-            Paziente {targetRole === "admin" ? "(opzionale)" : "(opzionale)"}
-          </Text>
+          <Text style={styles.label}>Paziente (opzionale)</Text>
           <TextInput
             value={patientName}
             onChangeText={setPatientName}
@@ -144,7 +163,7 @@ export default function NewShift() {
           <TextInput
             value={notes}
             onChangeText={setNotes}
-            style={[styles.input, { height: 70 }]}
+            style={[styles.input, { height: 70, textAlignVertical: "top" }]}
             multiline
             testID="shift-notes"
           />
@@ -167,9 +186,7 @@ export default function NewShift() {
                     size={22}
                     color={sel ? COLORS.brand : COLORS.onSurfaceMuted}
                   />
-                  <Text style={styles.userRowText}>
-                    {u.full_name} · @{u.username}
-                  </Text>
+                  <Text style={styles.userRowText}>{u.full_name}</Text>
                 </Pressable>
               );
             })
@@ -193,54 +210,22 @@ export default function NewShift() {
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: COLORS.surface },
-  header: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    padding: SPACING.lg,
-    borderBottomWidth: 1,
-    borderBottomColor: COLORS.border,
-    backgroundColor: COLORS.surfaceSecondary,
-  },
+  header: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", padding: SPACING.lg, borderBottomWidth: 1, borderBottomColor: COLORS.border, backgroundColor: COLORS.surfaceSecondary },
   headerTitle: { fontSize: 17, fontWeight: "700", color: COLORS.navy },
   err: { color: COLORS.error, marginBottom: SPACING.md, textAlign: "center" },
   label: { fontSize: 12, color: COLORS.onSurfaceMuted, marginBottom: 6, marginTop: SPACING.sm, fontWeight: "600" },
-  input: {
-    backgroundColor: COLORS.surfaceSecondary,
-    borderRadius: RADIUS.sm,
-    paddingHorizontal: SPACING.md,
-    paddingVertical: 12,
-    fontSize: 15,
-    color: COLORS.onSurface,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-    marginBottom: SPACING.sm,
-  },
+  input: { backgroundColor: COLORS.surfaceSecondary, borderRadius: RADIUS.sm, paddingHorizontal: SPACING.md, paddingVertical: 12, fontSize: 15, color: COLORS.onSurface, borderWidth: 1, borderColor: COLORS.border, marginBottom: SPACING.sm },
   row: { flexDirection: "row", gap: SPACING.sm },
-  chip: {
-    flex: 1,
-    paddingVertical: 12,
-    borderRadius: RADIUS.sm,
-    backgroundColor: COLORS.surfaceSecondary,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-    alignItems: "center",
-  },
+  chip: { flex: 1, paddingVertical: 12, borderRadius: RADIUS.sm, backgroundColor: COLORS.surfaceSecondary, borderWidth: 1, borderColor: COLORS.border, alignItems: "center", marginBottom: SPACING.sm },
   chipSel: { backgroundColor: COLORS.brand, borderColor: COLORS.brand },
   chipText: { fontWeight: "600", color: COLORS.navy },
-  userRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: SPACING.sm,
-    padding: SPACING.md,
-    backgroundColor: COLORS.surfaceSecondary,
-    borderRadius: RADIUS.sm,
-    marginBottom: 6,
-    ...SHADOW.card,
-  },
+  vrow: { flexDirection: "row", alignItems: "center", gap: SPACING.sm, padding: SPACING.md, backgroundColor: COLORS.surfaceSecondary, borderRadius: RADIUS.sm, marginBottom: 6, ...SHADOW.card },
+  vrowSel: { borderWidth: 1, borderColor: COLORS.brand },
+  vrowText: { fontSize: 14, color: COLORS.navy, fontWeight: "600" },
+  userRow: { flexDirection: "row", alignItems: "center", gap: SPACING.sm, padding: SPACING.md, backgroundColor: COLORS.surfaceSecondary, borderRadius: RADIUS.sm, marginBottom: 6, ...SHADOW.card },
   userRowSel: { borderWidth: 1, borderColor: COLORS.brand },
   userRowText: { fontSize: 14, color: COLORS.navy, fontWeight: "600" },
-  muted: { color: COLORS.onSurfaceMuted, fontSize: 13 },
+  muted: { color: COLORS.onSurfaceMuted, fontSize: 13, marginBottom: SPACING.sm },
   footer: { padding: SPACING.lg, borderTopWidth: 1, borderTopColor: COLORS.border, backgroundColor: COLORS.surface },
   primaryBtn: { backgroundColor: COLORS.brand, borderRadius: RADIUS.md, paddingVertical: 14, alignItems: "center" },
   primaryBtnText: { color: COLORS.white, fontWeight: "700", fontSize: 15 },

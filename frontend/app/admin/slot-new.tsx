@@ -16,6 +16,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 
 import { COLORS, SPACING, RADIUS, SHADOW } from "@/src/theme";
 import { api, UserPublic } from "@/src/api";
+import DatePickerField, { TimePickerField } from "@/src/components/DatePickerField";
 
 export default function NewSlot() {
   const router = useRouter();
@@ -77,11 +78,8 @@ export default function NewSlot() {
         <ScrollView contentContainerStyle={{ padding: SPACING.lg }} keyboardShouldPersistTaps="handled">
           {err ? <Text style={styles.err}>{err}</Text> : null}
 
-          <Text style={styles.label}>Data (AAAA-MM-GG)</Text>
-          <TextInput value={date} onChangeText={setDate} style={styles.input} testID="slot-date" autoCapitalize="none" />
-
-          <Text style={styles.label}>Orario (HH:MM)</Text>
-          <TextInput value={time} onChangeText={setTime} style={styles.input} testID="slot-time" />
+          <DatePickerField label="Data" value={date} onChange={setDate} testID="slot-date" />
+          <TimePickerField label="Orario" value={time} onChange={setTime} testID="slot-time" />
 
           <Text style={styles.label}>Tipo di Mezzo</Text>
           <View style={{ flexDirection: "row", gap: SPACING.sm, marginBottom: SPACING.md }}>

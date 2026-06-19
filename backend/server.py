@@ -221,6 +221,22 @@ class TeamMember(BaseModel):
     photo_b64: Optional[str] = None
 
 
+class VehicleInput(BaseModel):
+    name: str  # e.g. "Ambulanza 1"
+    vehicle_type: Literal["ambulanza", "furgone", "altro"]
+    plate: Optional[str] = None
+    notes: Optional[str] = None
+
+
+class Vehicle(BaseModel):
+    id: str
+    name: str
+    vehicle_type: str
+    plate: Optional[str] = None
+    notes: Optional[str] = None
+    created_at: str
+
+
 class UserCreateResponse(BaseModel):
     user: UserPublic
     generated_password: Optional[str] = None
@@ -836,6 +852,39 @@ async def admin_update_user_profile(
         raise HTTPException(status_code=404, detail="Utente non trovato")
     doc = await db.users.find_one({"id": user_id}, {"_id": 0, "password_hash": 0})
     return UserPublic(**doc)
+
+
+# ----- Garage / Vehicles -----
+@api_router.get("/vehicles", response_model=List[Vehicle])
+async def list_vehicles(user: dict = Depends(require_role("master", "admin"))):
+    docs = await db.vehicles.find({}, {"_id": 0}).sort([("name", 1)]).to_list(200)
+    return [Vehicle(**d) for d in docs]
+
+
+@api_router.post("/vehicles", response_model=Vehicle)
+async def create_vehicle(body: VehicleInput, user: dict = Depends(require_role("master", "admin"))):
+    v = {
+        "id": str(uuid.uuid4()),
+        **body.model_dump(),
+        "created_at": datetime.now(timezone.utc).isoformat(),
+    }
+    await db.vehicles.insert_one(v)
+    return Vehicle(**{k: vv for k, vv in v.items() if k != "_id"})
+
+
+@api_router.patch("/vehicles/{vehicle_id}", response_model=Vehicle)
+async def update_vehicle(vehicle_id: str, body: VehicleInput, user: dict = Depends(require_role("master", "admin"))):
+    res = await db.vehicles.update_one({"id": vehicle_id}, {"$set": body.model_dump()})
+    if res.matched_count == 0:
+        raise HTTPException(status_code=404, detail="Mezzo non trovato")
+    doc = await db.vehicles.find_one({"id": vehicle_id}, {"_id": 0})
+    return Vehicle(**doc)
+
+
+@api_router.delete("/vehicles/{vehicle_id}")
+async def delete_vehicle(vehicle_id: str, user: dict = Depends(require_role("master", "admin"))):
+    await db.vehicles.delete_one({"id": vehicle_id})
+    return {"ok": True}
 
 
 # include router and middleware

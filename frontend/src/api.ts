@@ -63,6 +63,18 @@ export type TeamMember = {
   photo_b64?: string | null;
 };
 
+export type VehicleInput = {
+  name: string;
+  vehicle_type: "ambulanza" | "furgone" | "altro";
+  plate?: string;
+  notes?: string;
+};
+
+export type Vehicle = VehicleInput & {
+  id: string;
+  created_at: string;
+};
+
 export type Slot = {
   id: string;
   date: string;
@@ -210,6 +222,20 @@ export const api = {
       method: "PATCH",
       body: JSON.stringify({ photo_b64 }),
     });
+  },
+
+  // Vehicles (Garage)
+  async listVehicles() {
+    return request<Vehicle[]>("/vehicles");
+  },
+  async createVehicle(body: VehicleInput) {
+    return request<Vehicle>("/vehicles", { method: "POST", body: JSON.stringify(body) });
+  },
+  async updateVehicle(id: string, body: VehicleInput) {
+    return request<Vehicle>(`/vehicles/${id}`, { method: "PATCH", body: JSON.stringify(body) });
+  },
+  async deleteVehicle(id: string) {
+    return request<{ ok: boolean }>(`/vehicles/${id}`, { method: "DELETE" });
   },
 
   // Users

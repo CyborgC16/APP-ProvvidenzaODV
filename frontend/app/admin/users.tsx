@@ -105,7 +105,7 @@ export default function UsersAdmin() {
               <View style={{ flex: 1 }}>
                 <Text style={styles.userName}>{usr.full_name}</Text>
                 <Text style={styles.userMeta}>
-                  @{usr.username} · {usr.role === "admin" ? "Admin" : "Servizio Civile"}
+                  @{usr.username} · {usr.role === "admin" ? "Volontario" : "Servizio Civile"}
                 </Text>
                 {usr.email ? <Text style={styles.userMeta}>{usr.email}</Text> : null}
               </View>
@@ -169,7 +169,7 @@ export default function UsersAdmin() {
                   onPress={() => setU((p) => ({ ...p, role: "admin" as any }))}
                   style={[styles.roleChip, u.role === "admin" && styles.roleChipSel]}
                 >
-                  <Text style={[styles.roleChipText, u.role === "admin" && { color: COLORS.white }]}>Admin</Text>
+                  <Text style={[styles.roleChipText, u.role === "admin" && { color: COLORS.white }]}>Volontario</Text>
                 </Pressable>
               )}
             </View>
