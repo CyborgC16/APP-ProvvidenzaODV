@@ -248,14 +248,21 @@ export const api = {
     email?: string;
     role: "admin" | "servizio_civile" | "master";
     password?: string;
+    photo_b64?: string;
   }) {
     return request<{ user: UserPublic; generated_password?: string }>("/users", {
       method: "POST",
       body: JSON.stringify(body),
     });
   },
+  async updateUser(id: string, body: { full_name?: string; email?: string | null }) {
+    return request<UserPublic>(`/users/${id}`, { method: "PATCH", body: JSON.stringify(body) });
+  },
   async deleteUser(id: string) {
     return request<{ ok: boolean }>(`/users/${id}`, { method: "DELETE" });
+  },
+  async deleteOwnAccount() {
+    return request<{ ok: boolean }>(`/auth/me`, { method: "DELETE" });
   },
   async resetPassword(id: string) {
     return request<{ new_password: string }>(`/users/${id}/reset-password`, { method: "POST" });

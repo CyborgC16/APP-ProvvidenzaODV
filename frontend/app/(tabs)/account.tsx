@@ -27,7 +27,7 @@ import { pickImageBase64 } from "@/src/utils/picker";
 export default function Account() {
   const { user, loading, logout, login, refresh } = useAuth();
   const router = useRouter();
-  const { t } = useI18n();
+  const [showAdminProfile, setShowAdminProfile] = useState(false);
 
   if (loading) {
     return (
@@ -46,18 +46,24 @@ export default function Account() {
 
   if (user.role === "master" || user.role === "admin") {
     return (
-      <AdminDashboard
-        onLogout={logout}
-        role={user.role}
-        onOpenUsers={() => router.push("/admin/users")}
-        onNewSlot={() => router.push("/admin/slot-new")}
-        onNewShift={() => router.push("/admin/shift-new")}
-        fullName={user.full_name}
-      />
+      <>
+        <AdminDashboard
+          onLogout={logout}
+          role={user.role}
+          onOpenUsers={() => router.push("/admin/users")}
+          onNewSlot={() => router.push("/admin/slot-new")}
+          onNewShift={() => router.push("/admin/shift-new")}
+          onOpenSettings={() => router.push("/impostazioni")}
+          onOpenProfile={() => setShowAdminProfile(true)}
+          fullName={user.full_name}
+          photoB64={user.photo_b64}
+        />
+        <ProfileEditor visible={showAdminProfile} onClose={() => setShowAdminProfile(false)} onSaved={refresh} />
+      </>
     );
   }
 
-  return <CivilServiceDashboard onLogout={logout} fullName={user.full_name} />;
+  return <CivilServiceDashboard onLogout={logout} fullName={user.full_name} onOpenSettings={() => router.push("/impostazioni")} />;
 }
 
 // ===== FORCE CHANGE PASSWORD =====
@@ -140,6 +146,7 @@ function LoginView({ onLogin }: { onLogin: (u: string, p: string) => Promise<any
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+  const router = useRouter();
 
   const handleLogin = async () => {
     setLoading(true);
@@ -201,11 +208,23 @@ function LoginView({ onLogin }: { onLogin: (u: string, p: string) => Promise<any
             Le credenziali sono fornite dagli amministratori. La registrazione autonoma non è
             consentita.
           </Text>
+
+          <View style={styles.loginLegal}>
+            <Pressable onPress={() => router.push("/legal/privacy")} testID="login-privacy">
+              <Text style={styles.legalLink}>Privacy</Text>
+            </Pressable>
+            <Text style={styles.legalSep}>·</Text>
+            <Pressable onPress={() => router.push("/legal/terms")} testID="login-terms">
+              <Text style={styles.legalLink}>Termini</Text>
+            </Pressable>
+          </View>
         </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>
   );
 }
+
+// Add router import for LoginView
 
 // ===== ADMIN DASHBOARD =====
 function AdminDashboard({
@@ -214,14 +233,20 @@ function AdminDashboard({
   onOpenUsers,
   onNewSlot,
   onNewShift,
+  onOpenSettings,
+  onOpenProfile,
   fullName,
+  photoB64,
 }: {
   onLogout: () => Promise<void>;
   role: string;
   onOpenUsers: () => void;
   onNewSlot: () => void;
   onNewShift: () => void;
+  onOpenSettings: () => void;
+  onOpenProfile: () => void;
   fullName: string;
+  photoB64?: string | null;
 }) {
   const router = useRouter();
   const [date, setDate] = useState<string>(new Date().toISOString().slice(0, 10));
@@ -265,13 +290,26 @@ function AdminDashboard({
   return (
     <SafeAreaView style={styles.safe} edges={["top"]} testID="admin-dashboard">
       <View style={styles.dashHeader}>
+        {photoB64 ? (
+          <Image source={{ uri: photoB64 }} style={styles.avatar} contentFit="cover" />
+        ) : (
+          <View style={[styles.avatar, { backgroundColor: COLORS.brandLight, alignItems: "center", justifyContent: "center" }]}>
+            <Text style={{ color: COLORS.brand, fontWeight: "800", fontSize: 16 }}>{fullName.charAt(0)}</Text>
+          </View>
+        )}
         <View style={{ flex: 1 }}>
           <Text style={styles.dashTitle}>Ciao, {fullName}</Text>
           <Text style={styles.dashSubtitle}>
-            Ruolo: <Text style={{ fontWeight: "700", color: COLORS.brand }}>{role.toUpperCase()}</Text>
+            Ruolo: <Text style={{ fontWeight: "700", color: COLORS.brand }}>{role === "admin" ? "VOLONTARIO" : role.toUpperCase()}</Text>
           </Text>
         </View>
         <LangToggle />
+        <Pressable onPress={onOpenProfile} hitSlop={10} testID="open-admin-profile" style={styles.iconBtn}>
+          <Ionicons name="create-outline" size={22} color={COLORS.navy} />
+        </Pressable>
+        <Pressable onPress={onOpenSettings} hitSlop={10} testID="open-settings-btn" style={styles.iconBtn}>
+          <Ionicons name="settings-outline" size={22} color={COLORS.navy} />
+        </Pressable>
         <Pressable onPress={onLogout} hitSlop={10} testID="logout-btn" style={styles.iconBtn}>
           <Ionicons name="log-out-outline" size={22} color={COLORS.navy} />
         </Pressable>
@@ -399,7 +437,7 @@ function AdminDashboard({
 }
 
 // ===== CIVIL SERVICE DASHBOARD =====
-function CivilServiceDashboard({ onLogout, fullName }: { onLogout: () => Promise<void>; fullName: string }) {
+function CivilServiceDashboard({ onLogout, fullName, onOpenSettings }: { onLogout: () => Promise<void>; fullName: string; onOpenSettings: () => void }) {
   const { user, refresh } = useAuth();
   const [shifts, setShifts] = useState<Slot[]>([]);
   const [loading, setLoading] = useState(false);
@@ -443,6 +481,9 @@ function CivilServiceDashboard({ onLogout, fullName }: { onLogout: () => Promise
         <LangToggle />
         <Pressable onPress={() => setShowProfile(true)} hitSlop={10} testID="open-profile-btn" style={styles.iconBtn}>
           <Ionicons name="create-outline" size={22} color={COLORS.navy} />
+        </Pressable>
+        <Pressable onPress={onOpenSettings} hitSlop={10} testID="open-settings-btn-sc" style={styles.iconBtn}>
+          <Ionicons name="settings-outline" size={22} color={COLORS.navy} />
         </Pressable>
         <Pressable onPress={onLogout} hitSlop={10} testID="logout-btn" style={styles.iconBtn}>
           <Ionicons name="log-out-outline" size={22} color={COLORS.navy} />
@@ -617,6 +658,9 @@ const styles = StyleSheet.create({
   },
   primaryBtnText: { color: COLORS.white, fontWeight: "700", fontSize: 15 },
   loginNote: { fontSize: 12, color: COLORS.onSurfaceMuted, textAlign: "center", marginTop: SPACING.xl, lineHeight: 18 },
+  loginLegal: { flexDirection: "row", justifyContent: "center", gap: SPACING.sm, marginTop: SPACING.md },
+  legalLink: { color: COLORS.brand, fontWeight: "600", fontSize: 12, textDecorationLine: "underline" },
+  legalSep: { color: COLORS.onSurfaceMuted, fontSize: 12 },
   errorBanner: {
     flexDirection: "row",
     alignItems: "center",

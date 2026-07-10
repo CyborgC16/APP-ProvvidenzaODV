@@ -1,5 +1,5 @@
 """La Provvidenza ODV - Backend API"""
-from fastapi import FastAPI, APIRouter, HTTPException, Depends, status, BackgroundTasks, WebSocket, WebSocketDisconnect, Query
+from fastapi import FastAPI, APIRouter, HTTPException, Depends, status, BackgroundTasks
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
@@ -14,11 +14,11 @@ from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from pathlib import Path
 from datetime import datetime, timezone, timedelta
-from typing import List, Optional, Literal, Dict
+from typing import List, Optional, Literal
 
 import bcrypt
 import jwt
-from pydantic import BaseModel, Field, EmailStr
+from pydantic import BaseModel, Field, EmailStr, field_validator
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / ".env")
@@ -137,6 +137,27 @@ class UserCreateRequest(BaseModel):
     email: Optional[EmailStr] = None
     role: Literal["admin", "servizio_civile", "master"]
     password: Optional[str] = None  # if None, auto-generate
+    photo_b64: Optional[str] = None
+
+    @field_validator("email", mode="before")
+    @classmethod
+    def _empty_email_to_none(cls, v):
+        # Accept "" from frontend forms as null
+        if isinstance(v, str) and v.strip() == "":
+            return None
+        return v
+
+
+class UserUpdateRequest(BaseModel):
+    full_name: Optional[str] = None
+    email: Optional[EmailStr] = None
+
+    @field_validator("email", mode="before")
+    @classmethod
+    def _empty_email_to_none(cls, v):
+        if isinstance(v, str) and v.strip() == "":
+            return None
+        return v
 
 
 class ChangePasswordRequest(BaseModel):
@@ -483,7 +504,7 @@ async def create_user(body: UserCreateRequest, user: dict = Depends(require_role
         "must_change_password": True,
         "bio": None,
         "age": None,
-        "photo_b64": None,
+        "photo_b64": body.photo_b64,
         "created_at": datetime.now(timezone.utc).isoformat(),
     }
     await db.users.insert_one(new_user)
@@ -495,8 +516,30 @@ async def create_user(body: UserCreateRequest, user: dict = Depends(require_role
         role=new_user["role"],
         created_at=new_user["created_at"],
         must_change_password=True,
+        photo_b64=new_user["photo_b64"],
     )
     return UserCreateResponse(user=public, generated_password=generated)
+
+
+@api_router.patch("/users/{user_id}", response_model=UserPublic)
+async def update_user(user_id: str, body: UserUpdateRequest, user: dict = Depends(require_role("master", "admin"))):
+    target = await db.users.find_one({"id": user_id})
+    if not target:
+        raise HTTPException(status_code=404, detail="Utente non trovato")
+    if target["role"] == "master" and user["role"] != "master":
+        raise HTTPException(status_code=403, detail="Solo il master può modificare un master")
+    update: dict = {}
+    if body.full_name is not None and body.full_name.strip():
+        update["full_name"] = body.full_name.strip()
+    if body.email is not None:
+        update["email"] = body.email
+    else:
+        # explicit clear
+        update["email"] = None
+    if update:
+        await db.users.update_one({"id": user_id}, {"$set": update})
+    doc = await db.users.find_one({"id": user_id}, {"_id": 0, "password_hash": 0})
+    return UserPublic(**doc)
 
 
 @api_router.post("/auth/change-password")
@@ -510,6 +553,20 @@ async def change_password(body: ChangePasswordRequest, user: dict = Depends(get_
         {"id": user["id"]},
         {"$set": {"password_hash": hash_password(body.new_password), "must_change_password": False}},
     )
+    return {"ok": True}
+
+
+@api_router.delete("/auth/me")
+async def delete_own_account(user: dict = Depends(get_current_user)):
+    """Any authenticated user can delete their own account (GDPR/Play Store requirement)."""
+    if user["role"] == "master":
+        # Prevent orphaning the app – must have another master alive
+        others = await db.users.count_documents({"role": "master", "id": {"$ne": user["id"]}})
+        if others == 0:
+            raise HTTPException(status_code=400, detail="Impossibile eliminare l'unico account master")
+    await db.users.delete_one({"id": user["id"]})
+    # Remove personal references from slots (unassign)
+    await db.slots.update_many({"assigned_user_ids": user["id"]}, {"$pull": {"assigned_user_ids": user["id"]}})
     return {"ok": True}
 
 
@@ -892,165 +949,6 @@ async def update_vehicle(vehicle_id: str, body: VehicleInput, user: dict = Depen
 async def delete_vehicle(vehicle_id: str, user: dict = Depends(require_role("master", "admin"))):
     await db.vehicles.delete_one({"id": vehicle_id})
     return {"ok": True}
-
-
-# ============ CREW (live positions) ============
-crew_positions: Dict[str, dict] = {}  # user_id -> {lat, lon, full_name, photo_b64, role, updated_at}
-crew_clients: List[WebSocket] = []
-
-
-def _token_user_id(token: str) -> Optional[str]:
-    try:
-        payload = jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALGO])
-        return payload.get("sub")
-    except Exception:
-        return None
-
-
-class CrewPositionIn(BaseModel):
-    latitude: float
-    longitude: float
-
-
-@api_router.get("/crew/positions")
-async def list_crew(user: dict = Depends(require_role("master", "admin", "servizio_civile"))):
-    return list(crew_positions.values())
-
-
-@api_router.post("/crew/positions")
-async def set_crew_position(body: CrewPositionIn, user: dict = Depends(require_role("master", "admin", "servizio_civile"))):
-    doc = {
-        "user_id": user["id"],
-        "full_name": user["full_name"],
-        "role": user["role"],
-        "photo_b64": user.get("photo_b64"),
-        "latitude": body.latitude,
-        "longitude": body.longitude,
-        "updated_at": datetime.now(timezone.utc).isoformat(),
-    }
-    crew_positions[user["id"]] = doc
-    # Broadcast to WS clients
-    stale = []
-    import json as _json
-    payload = _json.dumps({"type": "position", "data": doc})
-    for ws in crew_clients:
-        try:
-            await ws.send_text(payload)
-        except Exception:
-            stale.append(ws)
-    for ws in stale:
-        if ws in crew_clients:
-            crew_clients.remove(ws)
-    return {"ok": True}
-
-
-@api_router.delete("/crew/positions")
-async def clear_crew_position(user: dict = Depends(require_role("master", "admin", "servizio_civile"))):
-    crew_positions.pop(user["id"], None)
-    import json as _json
-    payload = _json.dumps({"type": "leave", "user_id": user["id"]})
-    for ws in list(crew_clients):
-        try:
-            await ws.send_text(payload)
-        except Exception:
-            pass
-    return {"ok": True}
-
-
-@app.websocket("/ws/crew")
-async def ws_crew(ws: WebSocket, token: str = Query(...)):
-    uid = _token_user_id(token)
-    if not uid:
-        await ws.close(code=4401)
-        return
-    await ws.accept()
-    crew_clients.append(ws)
-    try:
-        # Send current snapshot
-        import json as _json
-        await ws.send_text(_json.dumps({"type": "snapshot", "data": list(crew_positions.values())}))
-        while True:
-            await ws.receive_text()  # keep-alive
-    except WebSocketDisconnect:
-        pass
-    finally:
-        if ws in crew_clients:
-            crew_clients.remove(ws)
-
-
-# ============ WK (Walkie-Talkie asincrono) ============
-wk_channels: Dict[str, List[WebSocket]] = {"servizio_civile": [], "admin": []}
-wk_presence: Dict[str, Dict[str, dict]] = {"servizio_civile": {}, "admin": {}}  # frequency -> user_id -> {full_name, role, photo_b64}
-
-
-async def _broadcast_wk_presence(frequency: str):
-    import json as _json
-    online = list(wk_presence[frequency].values())
-    payload = _json.dumps({"type": "presence", "online": online})
-    stale = []
-    for peer in wk_channels[frequency]:
-        try:
-            await peer.send_text(payload)
-        except Exception:
-            stale.append(peer)
-    for s in stale:
-        if s in wk_channels[frequency]:
-            wk_channels[frequency].remove(s)
-
-
-@app.websocket("/ws/wk/{frequency}")
-async def ws_wk(ws: WebSocket, frequency: str, token: str = Query(...)):
-    if frequency not in ("servizio_civile", "admin"):
-        await ws.close(code=4400)
-        return
-    uid = _token_user_id(token)
-    if not uid:
-        await ws.close(code=4401)
-        return
-    user = await db.users.find_one({"id": uid}, {"_id": 0})
-    if not user:
-        await ws.close(code=4401)
-        return
-    if frequency == "admin" and user["role"] not in ("admin", "master"):
-        await ws.close(code=4403)
-        return
-    if frequency == "servizio_civile" and user["role"] not in ("servizio_civile", "admin", "master"):
-        await ws.close(code=4403)
-        return
-    await ws.accept()
-    wk_channels[frequency].append(ws)
-    wk_presence[frequency][uid] = {
-        "user_id": uid,
-        "full_name": user["full_name"],
-        "role": user["role"],
-        "photo_b64": user.get("photo_b64"),
-    }
-    await _broadcast_wk_presence(frequency)
-    try:
-        while True:
-            msg = await ws.receive_text()
-            stale = []
-            for peer in wk_channels[frequency]:
-                if peer is ws:
-                    continue
-                try:
-                    await peer.send_text(msg)
-                except Exception:
-                    stale.append(peer)
-            for s in stale:
-                if s in wk_channels[frequency]:
-                    wk_channels[frequency].remove(s)
-    except WebSocketDisconnect:
-        pass
-    finally:
-        if ws in wk_channels[frequency]:
-            wk_channels[frequency].remove(ws)
-        # Only remove from presence if no other ws from same user still connected
-        still_connected = any(
-            True for _ in wk_channels[frequency] if False  # placeholder; cannot easily detect
-        )
-        wk_presence[frequency].pop(uid, None)
-        await _broadcast_wk_presence(frequency)
 
 
 # include router and middleware

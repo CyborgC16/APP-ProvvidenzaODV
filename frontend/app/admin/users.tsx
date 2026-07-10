@@ -10,7 +10,10 @@ import {
   Modal,
   KeyboardAvoidingView,
   Platform,
+  Alert,
 } from "react-native";
+import { Image } from "expo-image";
+import * as ImagePicker from "expo-image-picker";
 import { useRouter, useFocusEffect } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -26,8 +29,12 @@ export default function UsersAdmin() {
   const [loading, setLoading] = useState(false);
   const [showCreate, setShowCreate] = useState(false);
   const [newPwModal, setNewPwModal] = useState<{ username: string; pw: string } | null>(null);
+  const [editing, setEditing] = useState<UserPublic | null>(null);
+  const [editFullName, setEditFullName] = useState("");
+  const [editEmail, setEditEmail] = useState("");
+  const [savingEdit, setSavingEdit] = useState(false);
 
-  const [u, setU] = useState({ username: "", full_name: "", email: "", role: "servizio_civile" as "servizio_civile" | "admin" | "master" });
+  const [u, setU] = useState({ username: "", full_name: "", email: "", role: "servizio_civile" as "servizio_civile" | "admin" | "master", photo_b64: "" });
   const [creating, setCreating] = useState(false);
   const [createErr, setCreateErr] = useState<string | null>(null);
 
@@ -60,12 +67,13 @@ export default function UsersAdmin() {
         full_name: u.full_name.trim(),
         email: u.email.trim() || undefined,
         role: u.role,
+        photo_b64: u.photo_b64 || undefined,
       });
       setShowCreate(false);
       if (res.generated_password) {
         setNewPwModal({ username: res.user.username, pw: res.generated_password });
       }
-      setU({ username: "", full_name: "", email: "", role: "servizio_civile" });
+      setU({ username: "", full_name: "", email: "", role: "servizio_civile", photo_b64: "" });
       load();
     } catch (e: any) {
       setCreateErr(e.message || "Errore");
@@ -74,14 +82,52 @@ export default function UsersAdmin() {
     }
   };
 
+  const pickPhoto = async () => {
+    const res = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      allowsEditing: true,
+      aspect: [1, 1],
+      quality: 0.6,
+      base64: true,
+    });
+    if (!res.canceled && res.assets[0]?.base64) {
+      setU((p) => ({ ...p, photo_b64: `data:image/jpeg;base64,${res.assets[0].base64}` }));
+    }
+  };
+
+  const openEdit = (usr: UserPublic) => {
+    setEditing(usr);
+    setEditFullName(usr.full_name);
+    setEditEmail(usr.email || "");
+  };
+
+  const saveEdit = async () => {
+    if (!editing) return;
+    setSavingEdit(true);
+    try {
+      await api.updateUser(editing.id, {
+        full_name: editFullName.trim(),
+        email: editEmail.trim() || null,
+      });
+      setEditing(null);
+      load();
+    } catch (e: any) {
+      Alert.alert("Errore", e.message || "Errore aggiornamento");
+    } finally {
+      setSavingEdit(false);
+    }
+  };
+
   const resetPw = async (id: string, username: string) => {
     const r = await api.resetPassword(id);
     setNewPwModal({ username, pw: r.new_password });
   };
 
-  const remove = async (id: string) => {
-    await api.deleteUser(id);
-    load();
+  const remove = async (id: string, name: string) => {
+    Alert.alert("Conferma eliminazione", `Eliminare l'utente ${name}?`, [
+      { text: "Annulla", style: "cancel" },
+      { text: "Elimina", style: "destructive", onPress: async () => { await api.deleteUser(id); load(); } },
+    ]);
   };
 
   return (
@@ -102,6 +148,13 @@ export default function UsersAdmin() {
         <ScrollView contentContainerStyle={{ padding: SPACING.lg }}>
           {users.map((usr) => (
             <View key={usr.id} style={styles.userCard} testID={`user-${usr.id}`}>
+              {usr.photo_b64 ? (
+                <Image source={{ uri: usr.photo_b64 }} style={styles.avatar} contentFit="cover" />
+              ) : (
+                <View style={[styles.avatar, styles.avatarEmpty]}>
+                  <Text style={styles.avatarInit}>{usr.full_name.charAt(0)}</Text>
+                </View>
+              )}
               <View style={{ flex: 1 }}>
                 <Text style={styles.userName}>{usr.full_name}</Text>
                 <Text style={styles.userMeta}>
@@ -109,10 +162,13 @@ export default function UsersAdmin() {
                 </Text>
                 {usr.email ? <Text style={styles.userMeta}>{usr.email}</Text> : null}
               </View>
+              <Pressable onPress={() => openEdit(usr)} hitSlop={6} testID={`edit-${usr.id}`} style={styles.actionBtn}>
+                <Ionicons name="create-outline" size={18} color={COLORS.navy} />
+              </Pressable>
               <Pressable onPress={() => resetPw(usr.id, usr.username)} hitSlop={6} testID={`reset-${usr.id}`} style={styles.actionBtn}>
                 <Ionicons name="key" size={18} color={COLORS.brand} />
               </Pressable>
-              <Pressable onPress={() => remove(usr.id)} hitSlop={6} testID={`remove-${usr.id}`} style={styles.actionBtn}>
+              <Pressable onPress={() => remove(usr.id, usr.full_name)} hitSlop={6} testID={`remove-${usr.id}`} style={styles.actionBtn}>
                 <Ionicons name="trash-outline" size={18} color={COLORS.error} />
               </Pressable>
             </View>
@@ -127,6 +183,17 @@ export default function UsersAdmin() {
           <View style={styles.modalCard}>
             <Text style={styles.modalTitle}>Nuovo Utente</Text>
             {createErr ? <Text style={styles.modalErr}>{createErr}</Text> : null}
+
+            <Pressable onPress={pickPhoto} style={styles.photoPicker} testID="pick-photo-create">
+              {u.photo_b64 ? (
+                <Image source={{ uri: u.photo_b64 }} style={styles.photoPreview} contentFit="cover" />
+              ) : (
+                <View style={styles.photoPlaceholder}>
+                  <Ionicons name="camera" size={26} color={COLORS.brand} />
+                  <Text style={styles.photoHint}>Aggiungi foto</Text>
+                </View>
+              )}
+            </Pressable>
 
             <Text style={styles.fieldLabel}>Username</Text>
             <TextInput
@@ -192,6 +259,40 @@ export default function UsersAdmin() {
                 style={[styles.btn, styles.btnPri, (!u.username || !u.full_name) && { opacity: 0.5 }]}
               >
                 {creating ? <ActivityIndicator color={COLORS.white} /> : <Text style={styles.btnPriText}>Crea</Text>}
+              </Pressable>
+            </View>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
+
+      {/* Edit user modal */}
+      <Modal visible={!!editing} animationType="slide" transparent onRequestClose={() => setEditing(null)}>
+        <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} style={styles.modalWrap}>
+          <View style={styles.modalCard} testID="edit-user-modal">
+            <Text style={styles.modalTitle}>Modifica Utente</Text>
+            <Text style={styles.fieldLabel}>Nome Completo</Text>
+            <TextInput
+              testID="edit-fullname"
+              value={editFullName}
+              onChangeText={setEditFullName}
+              style={styles.input}
+            />
+            <Text style={styles.fieldLabel}>Email</Text>
+            <TextInput
+              testID="edit-email"
+              value={editEmail}
+              onChangeText={setEditEmail}
+              autoCapitalize="none"
+              keyboardType="email-address"
+              style={styles.input}
+              placeholder="opzionale"
+            />
+            <View style={{ flexDirection: "row", gap: SPACING.sm, marginTop: SPACING.md }}>
+              <Pressable onPress={() => setEditing(null)} style={[styles.btn, styles.btnSec]}>
+                <Text style={styles.btnSecText}>Annulla</Text>
+              </Pressable>
+              <Pressable onPress={saveEdit} disabled={savingEdit || !editFullName.trim()} style={[styles.btn, styles.btnPri, !editFullName.trim() && { opacity: 0.5 }]} testID="save-edit-user">
+                {savingEdit ? <ActivityIndicator color={COLORS.white} /> : <Text style={styles.btnPriText}>Salva</Text>}
               </Pressable>
             </View>
           </View>
@@ -287,4 +388,21 @@ const styles = StyleSheet.create({
     marginVertical: SPACING.md,
   },
   pwText: { fontSize: 22, fontWeight: "800", color: COLORS.brand, letterSpacing: 2 },
+  avatar: { width: 44, height: 44, borderRadius: 22 },
+  avatarEmpty: { backgroundColor: COLORS.brandLight, alignItems: "center", justifyContent: "center" },
+  avatarInit: { fontSize: 16, fontWeight: "800", color: COLORS.brand },
+  photoPicker: { alignSelf: "center", marginBottom: SPACING.md },
+  photoPreview: { width: 90, height: 90, borderRadius: 45, borderWidth: 3, borderColor: COLORS.brand },
+  photoPlaceholder: {
+    width: 90,
+    height: 90,
+    borderRadius: 45,
+    borderWidth: 2,
+    borderStyle: "dashed",
+    borderColor: COLORS.brand,
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 4,
+  },
+  photoHint: { fontSize: 10, color: COLORS.brand, fontWeight: "600" },
 });

@@ -12,6 +12,9 @@ import LangToggle from "@/src/components/LangToggle";
 import { api, GalleryPhoto } from "@/src/api";
 
 const INSTAGRAM_URL = "https://www.instagram.com/la_provvidenza_anpas/";
+const ASSOCIATION_PHONE = "+390923123456"; // TODO: real number
+const EMERGENCY_112 = "112";
+const EMERGENCY_118 = "118";
 
 export default function Home() {
   const router = useRouter();
@@ -25,18 +28,18 @@ export default function Home() {
     api.listGallery().then(setPhotos).catch(() => {});
   }, []);
 
-  // Auto-scroll carousel
   useEffect(() => {
     if (photos.length < 2) return;
     const interval = setInterval(() => {
       indexRef.current = (indexRef.current + 1) % photos.length;
       listRef.current?.scrollToIndex({ index: indexRef.current, animated: true });
-    }, 3000);
+    }, 3500);
     return () => clearInterval(interval);
   }, [photos.length]);
 
-  const itemWidth = Math.min(width - SPACING.lg * 2, 320);
-  const itemHeight = Math.round(itemWidth * 0.62);
+  // Carousel item full-width edge-to-edge
+  const itemWidth = width;
+  const itemHeight = Math.round(itemWidth * 0.6);
 
   return (
     <SafeAreaView style={styles.safe} edges={["top"]} testID="home-screen">
@@ -51,7 +54,7 @@ export default function Home() {
           <LangToggle />
         </View>
 
-        {/* Hero */}
+        {/* Hero - full width edge-to-edge */}
         <Pressable
           testID="home-hero-card"
           onPress={() => router.push("/(tabs)/prenota")}
@@ -73,6 +76,22 @@ export default function Home() {
           </View>
         </Pressable>
 
+        {/* Emergency quick call */}
+        <View style={styles.emergencyRow}>
+          <Pressable style={[styles.emergencyBtn, styles.emergencyRed]} onPress={() => Linking.openURL(`tel:${EMERGENCY_112}`)} testID="call-112">
+            <Ionicons name="call" size={18} color={COLORS.white} />
+            <Text style={styles.emergencyText}>112</Text>
+          </Pressable>
+          <Pressable style={[styles.emergencyBtn, styles.emergencyBlue]} onPress={() => Linking.openURL(`tel:${EMERGENCY_118}`)} testID="call-118">
+            <Ionicons name="call" size={18} color={COLORS.white} />
+            <Text style={styles.emergencyText}>118</Text>
+          </Pressable>
+          <Pressable style={[styles.emergencyBtn, styles.emergencyBrand]} onPress={() => Linking.openURL(`tel:${ASSOCIATION_PHONE}`)} testID="call-assoc">
+            <Ionicons name="call" size={18} color={COLORS.white} />
+            <Text style={styles.emergencyText}>Centralino</Text>
+          </Pressable>
+        </View>
+
         {/* Instagram banner */}
         <Pressable
           testID="instagram-link"
@@ -89,15 +108,17 @@ export default function Home() {
           <Ionicons name="open-outline" size={20} color={COLORS.navy} />
         </Pressable>
 
-        {/* Services */}
+        {/* Services - full width banner edge-to-edge */}
         <Text style={styles.sectionTitle}>I Nostri Servizi</Text>
         <Pressable
           onPress={() => router.push("/(tabs)/prenota")}
-          style={styles.servicesBanner}
+          style={styles.fullBanner}
           testID="services-banner"
         >
-          <Image source={{ uri: SERVICES_IMAGE }} style={styles.servicesBannerImage} contentFit="contain" />
+          <Image source={{ uri: SERVICES_IMAGE }} style={styles.fullBannerImage} contentFit="cover" />
         </Pressable>
+
+        {/* Services quick cards */}
         <View style={styles.servicesRow}>
           <View style={styles.serviceCard} testID="service-emodialisi">
             <View style={[styles.iconBubble, { backgroundColor: COLORS.brandLight }]}>
@@ -110,36 +131,38 @@ export default function Home() {
             <View style={[styles.iconBubble, { backgroundColor: COLORS.brandLight }]}>
               <Ionicons name="accessibility" size={26} color={COLORS.brand} />
             </View>
-            <Text style={styles.serviceTitle}>Disabili</Text>
+            <Text style={styles.serviceTitle}>Trasporto Disabili</Text>
             <Text style={styles.serviceDesc}>Furgone attrezzato per trasporto carrozzine.</Text>
           </View>
         </View>
 
-        {/* Quick links */}
+        {/* Conoscici - full width tiles */}
         <Text style={styles.sectionTitle}>Conoscici</Text>
-        <View style={styles.linksRow}>
-          <Pressable
-            testID="link-servizio-civile"
-            onPress={() => router.push("/(tabs)/servizio-civile")}
-            style={[styles.linkCard, { backgroundColor: COLORS.white }]}
-          >
-            <Image source={{ uri: CIVIL_SERVICE_IMAGE }} style={styles.linkCardLogo} contentFit="contain" />
-            <View style={styles.linkLabelBar}>
-              <Text style={styles.linkLabel}>Servizio Civile</Text>
-            </View>
-          </Pressable>
-          <Pressable
-            testID="link-volontari"
-            onPress={() => router.push("/(tabs)/volontari")}
-            style={styles.linkCard}
-          >
-            <Image source={{ uri: AMBULANCE_IMAGE }} style={StyleSheet.absoluteFill} contentFit="cover" />
-            <LinearGradient colors={["transparent", "rgba(0,0,0,0.7)"]} style={StyleSheet.absoluteFill} />
-            <Text style={styles.linkLabel}>I Nostri Volontari</Text>
-          </Pressable>
-        </View>
+        <Pressable
+          testID="link-servizio-civile"
+          onPress={() => router.push("/(tabs)/servizio-civile")}
+          style={styles.conosciTile}
+        >
+          <Image source={{ uri: CIVIL_SERVICE_IMAGE }} style={styles.scuLogo} contentFit="contain" />
+          <View style={styles.conosciLabel}>
+            <Text style={styles.conosciLabelText}>Servizio Civile</Text>
+            <Ionicons name="chevron-forward" size={20} color={COLORS.white} />
+          </View>
+        </Pressable>
+        <Pressable
+          testID="link-volontari"
+          onPress={() => router.push("/(tabs)/volontari")}
+          style={styles.conosciTile}
+        >
+          <Image source={{ uri: AMBULANCE_IMAGE }} style={StyleSheet.absoluteFill} contentFit="cover" />
+          <LinearGradient colors={["transparent", "rgba(0,0,0,0.75)"]} style={StyleSheet.absoluteFill} />
+          <View style={[styles.conosciLabel, { backgroundColor: "transparent" }]}>
+            <Text style={[styles.conosciLabelText, { color: COLORS.white }]}>I Nostri Volontari</Text>
+            <Ionicons name="chevron-forward" size={20} color={COLORS.white} />
+          </View>
+        </Pressable>
 
-        {/* Gallery from Admin */}
+        {/* Gallery from Admin - full width edge-to-edge */}
         {photos.length > 0 && (
           <View testID="home-gallery">
             <Text style={styles.sectionTitle}>{t("section_gallery")}</Text>
@@ -149,11 +172,11 @@ export default function Home() {
               keyExtractor={(p) => p.id}
               horizontal
               showsHorizontalScrollIndicator={false}
-              contentContainerStyle={{ paddingHorizontal: SPACING.lg, gap: SPACING.md }}
-              snapToInterval={itemWidth + SPACING.md}
+              pagingEnabled
+              snapToInterval={itemWidth}
               decelerationRate="fast"
               renderItem={({ item }) => (
-                <View style={[styles.galleryCard, { width: itemWidth, height: itemHeight }]} testID={`gallery-${item.id}`}>
+                <View style={[styles.galleryItem, { width: itemWidth, height: itemHeight }]} testID={`gallery-${item.id}`}>
                   <Image source={{ uri: item.photo_b64 }} style={StyleSheet.absoluteFill} contentFit="cover" />
                   {item.caption ? (
                     <LinearGradient
@@ -164,13 +187,13 @@ export default function Home() {
                   {item.caption ? <Text style={styles.galleryCaption} numberOfLines={2}>{item.caption}</Text> : null}
                 </View>
               )}
-              getItemLayout={(_, i) => ({ length: itemWidth + SPACING.md, offset: (itemWidth + SPACING.md) * i, index: i })}
+              getItemLayout={(_, i) => ({ length: itemWidth, offset: itemWidth * i, index: i })}
             />
           </View>
         )}
 
-        {/* About */}
-        <View style={styles.aboutCard} testID="about-card">
+        {/* About - full width edge-to-edge */}
+        <View style={styles.aboutWrap} testID="about-card">
           <Image source={{ uri: ABOUT_IMAGE }} style={styles.aboutImage} contentFit="contain" />
         </View>
 
@@ -194,13 +217,9 @@ const styles = StyleSheet.create({
   headerLogo: { width: 48, height: 48 },
   brandTitle: { fontSize: 18, fontWeight: "700", color: COLORS.navy },
   brandSubtitle: { fontSize: 12, color: COLORS.onSurfaceMuted, marginTop: 2 },
-  hero: {
-    marginHorizontal: SPACING.lg,
-    height: 240,
-    borderRadius: RADIUS.lg,
-    overflow: "hidden",
-    ...SHADOW.card,
-  },
+
+  // Hero edge-to-edge
+  hero: { height: 240, overflow: "hidden" },
   heroContent: { flex: 1, justifyContent: "flex-end", padding: SPACING.lg },
   heroEyebrow: { color: COLORS.brand, fontSize: 11, fontWeight: "700", letterSpacing: 1.2 },
   heroTitle: { color: COLORS.white, fontSize: 26, fontWeight: "800", marginTop: SPACING.xs, lineHeight: 32 },
@@ -217,6 +236,39 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   heroCTAText: { color: COLORS.white, fontWeight: "700", fontSize: 14 },
+
+  // Emergency numbers
+  emergencyRow: { flexDirection: "row", gap: SPACING.sm, paddingHorizontal: SPACING.lg, paddingVertical: SPACING.md },
+  emergencyBtn: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    paddingVertical: 12,
+    borderRadius: RADIUS.pill,
+  },
+  emergencyRed: { backgroundColor: "#DC3545" },
+  emergencyBlue: { backgroundColor: "#0D6EFD" },
+  emergencyBrand: { backgroundColor: COLORS.brand },
+  emergencyText: { color: COLORS.white, fontWeight: "800", fontSize: 13 },
+
+  // Instagram (kept as card)
+  instaCard: {
+    marginHorizontal: SPACING.lg,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: SPACING.md,
+    padding: SPACING.md,
+    backgroundColor: COLORS.surfaceSecondary,
+    borderRadius: RADIUS.md,
+    ...SHADOW.card,
+  },
+  instaIcon: { width: 44, height: 44, borderRadius: 22, alignItems: "center", justifyContent: "center", backgroundColor: "#E1306C" },
+  instaTitle: { fontSize: 14, fontWeight: "700", color: COLORS.navy },
+  instaSubtitle: { fontSize: 12, color: COLORS.onSurfaceMuted, marginTop: 2 },
+
+  // Section titles
   sectionTitle: {
     fontSize: 18,
     fontWeight: "700",
@@ -225,7 +277,13 @@ const styles = StyleSheet.create({
     marginTop: SPACING.xl,
     marginBottom: SPACING.md,
   },
-  servicesRow: { flexDirection: "row", paddingHorizontal: SPACING.lg, gap: SPACING.md },
+
+  // Full-width edge-to-edge banner
+  fullBanner: { width: "100%", backgroundColor: COLORS.surfaceSecondary },
+  fullBannerImage: { width: "100%", aspectRatio: 1 },
+
+  // Service cards (small info cards, still bordered — visual balance)
+  servicesRow: { flexDirection: "row", paddingHorizontal: SPACING.lg, gap: SPACING.md, marginTop: SPACING.md },
   serviceCard: {
     flex: 1,
     backgroundColor: COLORS.surfaceSecondary,
@@ -243,81 +301,44 @@ const styles = StyleSheet.create({
   },
   serviceTitle: { fontSize: 15, fontWeight: "700", color: COLORS.navy },
   serviceDesc: { fontSize: 12, color: COLORS.onSurfaceMuted, marginTop: 4, lineHeight: 17 },
-  linksRow: { flexDirection: "row", paddingHorizontal: SPACING.lg, gap: SPACING.md },
-  linkCard: {
-    flex: 1,
-    height: 130,
-    borderRadius: RADIUS.md,
-    overflow: "hidden",
+
+  // Conoscici full-width tiles
+  conosciTile: {
+    width: "100%",
+    height: 200,
+    backgroundColor: COLORS.white,
     justifyContent: "flex-end",
-    padding: SPACING.md,
-    ...SHADOW.card,
+    marginBottom: 2,
+    overflow: "hidden",
   },
-  linkCardLogo: { width: "100%", height: "100%", position: "absolute", top: 8, left: 0 },
-  linkLabel: { color: COLORS.white, fontWeight: "700", fontSize: 15 },
-  linkLabelBar: {
+  scuLogo: { width: "100%", height: "100%", padding: 20 },
+  conosciLabel: {
     position: "absolute",
     left: 0,
     right: 0,
     bottom: 0,
+    paddingVertical: 12,
+    paddingHorizontal: SPACING.lg,
     backgroundColor: COLORS.brand,
-    paddingVertical: 8,
+    flexDirection: "row",
     alignItems: "center",
+    justifyContent: "space-between",
   },
-  servicesBanner: {
-    marginHorizontal: SPACING.lg,
-    borderRadius: RADIUS.md,
-    overflow: "hidden",
-    marginBottom: SPACING.md,
-    backgroundColor: COLORS.surfaceSecondary,
-    ...SHADOW.card,
-  },
-  servicesBannerImage: { width: "100%", aspectRatio: 1, backgroundColor: COLORS.surfaceSecondary },
-  aboutCard: {
-    marginHorizontal: SPACING.lg,
-    marginTop: SPACING.xl,
-    backgroundColor: COLORS.surfaceSecondary,
-    borderRadius: RADIUS.md,
-    overflow: "hidden",
-    ...SHADOW.card,
-  },
-  aboutImage: { width: "100%", aspectRatio: 1, backgroundColor: COLORS.surfaceSecondary },
-  aboutTitle: { fontSize: 17, fontWeight: "700", color: COLORS.navy, marginBottom: SPACING.sm },
-  aboutBody: { fontSize: 14, lineHeight: 22, color: COLORS.onSurface },
-  galleryCard: {
-    borderRadius: RADIUS.md,
-    overflow: "hidden",
-    backgroundColor: COLORS.surfaceTertiary,
-    ...SHADOW.card,
-  },
+  conosciLabelText: { color: COLORS.white, fontWeight: "800", fontSize: 16 },
+
+  // Gallery edge-to-edge
+  galleryItem: { overflow: "hidden", backgroundColor: COLORS.surfaceTertiary },
   galleryCaption: {
     position: "absolute",
     left: SPACING.md,
     right: SPACING.md,
     bottom: SPACING.md,
     color: COLORS.white,
-    fontSize: 13,
+    fontSize: 14,
     fontWeight: "600",
   },
-  instaCard: {
-    marginHorizontal: SPACING.lg,
-    marginTop: SPACING.lg,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: SPACING.md,
-    padding: SPACING.md,
-    backgroundColor: COLORS.surfaceSecondary,
-    borderRadius: RADIUS.md,
-    ...SHADOW.card,
-  },
-  instaIcon: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: "#E1306C",
-  },
-  instaTitle: { fontSize: 14, fontWeight: "700", color: COLORS.navy },
-  instaSubtitle: { fontSize: 12, color: COLORS.onSurfaceMuted, marginTop: 2 },
+
+  // About edge-to-edge
+  aboutWrap: { width: "100%", backgroundColor: COLORS.surfaceSecondary, marginTop: SPACING.lg },
+  aboutImage: { width: "100%", aspectRatio: 1 },
 });

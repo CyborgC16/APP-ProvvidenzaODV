@@ -196,8 +196,8 @@ export default function Prenota() {
                   <Ionicons name="accessibility" size={28} color={COLORS.brand} />
                 </View>
                 <View style={{ flex: 1 }}>
-                  <Text style={styles.vehicleTitle}>Furgone Disabili</Text>
-                  <Text style={styles.vehicleDesc}>Pedana per carrozzine, trasporto disabili.</Text>
+                  <Text style={styles.vehicleTitle}>Trasporto Disabili</Text>
+                  <Text style={styles.vehicleDesc}>Furgone con pedana per carrozzine.</Text>
                 </View>
                 {vehicle === "furgone" && <Ionicons name="checkmark-circle" size={24} color={COLORS.brand} />}
               </Pressable>

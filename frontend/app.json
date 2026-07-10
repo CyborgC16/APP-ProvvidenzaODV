@@ -2,7 +2,7 @@
   "expo": {
     "name": "frontend",
     "slug": "frontend",
-    "version": "1.0.3",
+    "version": "1.1.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "frontend",
@@ -14,8 +14,12 @@
         "NSLocationWhenInUseUsageDescription": "Condividi la posizione con la crew durante i servizi",
         "NSLocationAlwaysAndWhenInUseUsageDescription": "Condividi la posizione anche in background con la crew",
         "NSMicrophoneUsageDescription": "Trasmetti messaggi audio sul walkie-talkie",
-        "UIBackgroundModes": ["location", "audio"]
-      }
+        "UIBackgroundModes": [
+          "location",
+          "audio"
+        ]
+      },
+      "bundleIdentifier": "app.emergent.serviziocivileappbe35fcc4"
     },
     "android": {
       "adaptiveIcon": {
@@ -38,7 +42,8 @@
         "android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK",
         "android.permission.WAKE_LOCK",
         "android.permission.POST_NOTIFICATIONS"
-      ]
+      ],
+      "package": "app.emergent.serviziocivileapp35a62424"
     },
     "web": {
       "bundler": "metro",

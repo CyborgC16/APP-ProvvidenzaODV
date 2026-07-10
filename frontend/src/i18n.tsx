@@ -17,7 +17,7 @@ const IT: Dict = {
   // home
   hero_eyebrow: "SERVIZIO 24/7 · MARSALA",
   hero_title: "Prenota un\nTrasporto Sanitario",
-  hero_sub: "Ambulanza · Furgone Disabili · Emodialisi",
+  hero_sub: "Ambulanza · Trasporto Disabili · Emodialisi",
   hero_cta: "Prenota Ora",
   section_services: "I Nostri Servizi",
   service_dialysis: "Emodialisi",
@@ -36,7 +36,7 @@ const IT: Dict = {
   book_step_vehicle_desc: "Seleziona il servizio richiesto.",
   book_ambulance: "Ambulanza",
   book_ambulance_desc: "Trasporto sanitario, emodialisi e barellati.",
-  book_van: "Furgone Disabili",
+  book_van: "Trasporto Disabili",
   book_van_desc: "Pedana per carrozzine, trasporto disabili.",
   book_step_slot: "Data e Orario",
   book_step_slot_desc: "Seleziona uno degli slot disponibili impostati dagli amministratori.",

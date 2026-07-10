@@ -73,22 +73,6 @@ export default function TabsLayout() {
           tabBarIcon: ({ color, size }) => <Ionicons name="person-circle" size={size} color={color} />,
         }}
       />
-      <Tabs.Screen
-        name="crew"
-        options={{
-          title: "Crew",
-          href: user ? "/(tabs)/crew" : null,
-          tabBarIcon: ({ color, size }) => <Ionicons name="navigate" size={size} color={color} />,
-        }}
-      />
-      <Tabs.Screen
-        name="wk"
-        options={{
-          title: "WK",
-          href: user ? "/(tabs)/wk" : null,
-          tabBarIcon: ({ color, size }) => <Ionicons name="radio" size={size} color={color} />,
-        }}
-      />
     </Tabs>
   );
 }
