@@ -9,12 +9,12 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { COLORS, SPACING, RADIUS, SHADOW, LOGO_URL, HERO_IMAGE, AMBULANCE_IMAGE, CIVIL_SERVICE_IMAGE, ABOUT_IMAGE, SERVICES_IMAGE } from "@/src/theme";
 import { useI18n } from "@/src/i18n";
 import LangToggle from "@/src/components/LangToggle";
+import AnnouncementsBanner from "@/src/components/AnnouncementsBanner";
 import { api, GalleryPhoto } from "@/src/api";
 
 const INSTAGRAM_URL = "https://www.instagram.com/la_provvidenza_anpas/";
-const ASSOCIATION_PHONE = "+390923123456"; // TODO: real number
+const ASSOCIATION_PHONE = "+393203920933";
 const EMERGENCY_112 = "112";
-const EMERGENCY_118 = "118";
 
 export default function Home() {
   const router = useRouter();
@@ -76,21 +76,20 @@ export default function Home() {
           </View>
         </Pressable>
 
-        {/* Emergency quick call */}
+        {/* Emergency + Chiamaci */}
         <View style={styles.emergencyRow}>
           <Pressable style={[styles.emergencyBtn, styles.emergencyRed]} onPress={() => Linking.openURL(`tel:${EMERGENCY_112}`)} testID="call-112">
             <Ionicons name="call" size={18} color={COLORS.white} />
-            <Text style={styles.emergencyText}>112</Text>
-          </Pressable>
-          <Pressable style={[styles.emergencyBtn, styles.emergencyBlue]} onPress={() => Linking.openURL(`tel:${EMERGENCY_118}`)} testID="call-118">
-            <Ionicons name="call" size={18} color={COLORS.white} />
-            <Text style={styles.emergencyText}>118</Text>
+            <Text style={styles.emergencyText}>112 · Emergenza</Text>
           </Pressable>
           <Pressable style={[styles.emergencyBtn, styles.emergencyBrand]} onPress={() => Linking.openURL(`tel:${ASSOCIATION_PHONE}`)} testID="call-assoc">
             <Ionicons name="call" size={18} color={COLORS.white} />
-            <Text style={styles.emergencyText}>Centralino</Text>
+            <Text style={styles.emergencyText}>Chiamaci</Text>
           </Pressable>
         </View>
+
+        {/* Announcements banner (only for logged-in users) */}
+        <AnnouncementsBanner />
 
         {/* Instagram banner */}
         <Pressable

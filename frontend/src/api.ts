@@ -15,6 +15,10 @@ export type UserPublic = {
   bio?: string | null;
   age?: number | null;
   photo_b64?: string | null;
+  role_title?: string | null;
+  join_date?: string | null;
+  birth_date?: string | null;
+  notify_email?: boolean;
 };
 
 export type Shift = {
@@ -61,6 +65,20 @@ export type TeamMember = {
   bio?: string | null;
   age?: number | null;
   photo_b64?: string | null;
+  role_title?: string | null;
+  join_date?: string | null;
+  birth_date?: string | null;
+};
+
+export type Announcement = {
+  id: string;
+  title: string;
+  message: string;
+  level: "info" | "warning" | "danger";
+  expires_at: string;
+  created_at: string;
+  created_by: string;
+  author_name?: string | null;
 };
 
 export type VehicleInput = {

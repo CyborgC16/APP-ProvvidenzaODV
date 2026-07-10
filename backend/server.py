@@ -119,6 +119,10 @@ class UserPublic(BaseModel):
     bio: Optional[str] = None
     age: Optional[int] = None
     photo_b64: Optional[str] = None
+    role_title: Optional[str] = None
+    join_date: Optional[str] = None  # ISO date YYYY-MM-DD
+    birth_date: Optional[str] = None  # ISO date YYYY-MM-DD
+    notify_email: bool = True
 
 
 class LoginRequest(BaseModel):
@@ -170,6 +174,36 @@ class UpdateProfileRequest(BaseModel):
     bio: Optional[str] = None
     age: Optional[int] = None
     photo_b64: Optional[str] = None
+    role_title: Optional[str] = None
+    join_date: Optional[str] = None
+    birth_date: Optional[str] = None
+    notify_email: Optional[bool] = None
+
+
+class AdminEditBioRequest(BaseModel):
+    """Master can edit any user's bio; other roles can only edit their own via /profile."""
+    bio: Optional[str] = None
+    role_title: Optional[str] = None
+    join_date: Optional[str] = None
+    birth_date: Optional[str] = None
+
+
+class AnnouncementRequest(BaseModel):
+    title: str
+    message: str
+    level: Literal["info", "warning", "danger"] = "warning"
+    expires_at: str  # ISO date YYYY-MM-DD (inclusive)
+
+
+class AnnouncementPublic(BaseModel):
+    id: str
+    title: str
+    message: str
+    level: str
+    expires_at: str
+    created_at: str
+    created_by: str
+    author_name: Optional[str] = None
 
 
 class ShiftCreateRequest(BaseModel):
@@ -756,7 +790,7 @@ async def email_test(user: dict = Depends(require_role("master"))):
     return {"sent": ok}
 
 
-# ----- Profile self-edit (servizio_civile / admin) -----
+# ----- Profile self-edit (all authenticated users) -----
 @api_router.patch("/auth/profile", response_model=UserPublic)
 async def update_profile(body: UpdateProfileRequest, user: dict = Depends(get_current_user)):
     update: dict = {}
@@ -768,10 +802,116 @@ async def update_profile(body: UpdateProfileRequest, user: dict = Depends(get_cu
         update["age"] = body.age
     if body.photo_b64 is not None:
         update["photo_b64"] = body.photo_b64
+    if body.role_title is not None:
+        update["role_title"] = body.role_title
+    if body.join_date is not None:
+        update["join_date"] = body.join_date or None
+    if body.birth_date is not None:
+        update["birth_date"] = body.birth_date or None
+    if body.notify_email is not None:
+        update["notify_email"] = body.notify_email
     if update:
         await db.users.update_one({"id": user["id"]}, {"$set": update})
     doc = await db.users.find_one({"id": user["id"]}, {"_id": 0, "password_hash": 0})
     return UserPublic(**doc)
+
+
+# ----- Admin/Master edit any user's bio ----
+@api_router.patch("/users/{user_id}/bio", response_model=UserPublic)
+async def admin_edit_bio(user_id: str, body: AdminEditBioRequest, user: dict = Depends(require_role("master"))):
+    target = await db.users.find_one({"id": user_id})
+    if not target:
+        raise HTTPException(status_code=404, detail="Utente non trovato")
+    update: dict = {}
+    if body.bio is not None:
+        update["bio"] = body.bio
+    if body.role_title is not None:
+        update["role_title"] = body.role_title
+    if body.join_date is not None:
+        update["join_date"] = body.join_date or None
+    if body.birth_date is not None:
+        update["birth_date"] = body.birth_date or None
+    if update:
+        await db.users.update_one({"id": user_id}, {"$set": update})
+    doc = await db.users.find_one({"id": user_id}, {"_id": 0, "password_hash": 0})
+    return UserPublic(**doc)
+
+
+# ----- Announcements (avvisi) -----
+def _now_iso_date():
+    return datetime.now(timezone.utc).date().isoformat()
+
+
+async def _send_announcement_emails(title: str, message: str, level: str, expires_at: str):
+    """Send email to all users with notify_email=True and a valid email."""
+    try:
+        users = await db.users.find(
+            {"email": {"$ne": None}, "notify_email": {"$ne": False}},
+            {"email": 1, "full_name": 1, "_id": 0},
+        ).to_list(1000)
+        for u in users:
+            if not u.get("email"):
+                continue
+            try:
+                subject = f"[La Provvidenza] {title}"
+                html = f"""
+                <div style='font-family:sans-serif;max-width:600px;margin:auto'>
+                  <div style='background:#EA5A0B;color:white;padding:16px;border-radius:8px 8px 0 0'>
+                    <h2 style='margin:0'>{title}</h2>
+                  </div>
+                  <div style='padding:16px;border:1px solid #eee;border-radius:0 0 8px 8px'>
+                    <p style='color:#333;line-height:1.5;white-space:pre-wrap'>{message}</p>
+                    <p style='color:#888;font-size:12px;margin-top:20px'>
+                      Avviso valido fino al {expires_at}<br/>
+                      Puoi disattivare queste email dalle Impostazioni della tua app.
+                    </p>
+                  </div>
+                </div>
+                """
+                send_email(u["email"], subject, html)
+            except Exception as ex:
+                logger.warning(f"announcement email failed for {u.get('email')}: {ex}")
+    except Exception as ex:
+        logger.warning(f"announcement email broadcast failed: {ex}")
+
+
+@api_router.post("/announcements", response_model=AnnouncementPublic)
+async def create_announcement(
+    body: AnnouncementRequest,
+    background: BackgroundTasks,
+    user: dict = Depends(require_role("master", "admin")),
+):
+    doc = {
+        "id": str(uuid.uuid4()),
+        "title": body.title.strip(),
+        "message": body.message.strip(),
+        "level": body.level,
+        "expires_at": body.expires_at,
+        "created_at": datetime.now(timezone.utc).isoformat(),
+        "created_by": user["id"],
+        "author_name": user["full_name"],
+    }
+    await db.announcements.insert_one(doc)
+    background.add_task(_send_announcement_emails, doc["title"], doc["message"], doc["level"], doc["expires_at"])
+    return AnnouncementPublic(**{k: v for k, v in doc.items() if k != "_id"})
+
+
+@api_router.get("/announcements", response_model=List[AnnouncementPublic])
+async def list_announcements(user: dict = Depends(get_current_user)):
+    """Only authenticated users get announcements."""
+    today = _now_iso_date()
+    docs = await db.announcements.find(
+        {"expires_at": {"$gte": today}}, {"_id": 0}
+    ).sort("created_at", -1).to_list(50)
+    return [AnnouncementPublic(**d) for d in docs]
+
+
+@api_router.delete("/announcements/{ann_id}")
+async def delete_announcement(ann_id: str, user: dict = Depends(require_role("master", "admin"))):
+    res = await db.announcements.delete_one({"id": ann_id})
+    if res.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Avviso non trovato")
+    return {"ok": True}
 
 
 # ----- Shifts (turni) -----
@@ -888,15 +1028,28 @@ async def delete_patient(patient_id: str, user: dict = Depends(require_role("mas
 
 
 # ----- Team members (public read for Volontari / Servizio Civile pages) -----
-@api_router.get("/team/{role}", response_model=List[TeamMember])
+class TeamMemberExt(BaseModel):
+    id: str
+    full_name: str
+    role: str
+    bio: Optional[str] = None
+    age: Optional[int] = None
+    photo_b64: Optional[str] = None
+    role_title: Optional[str] = None
+    join_date: Optional[str] = None
+    birth_date: Optional[str] = None
+
+
+@api_router.get("/team/{role}", response_model=List[TeamMemberExt])
 async def list_team(role: str):
     if role not in ("admin", "servizio_civile"):
         raise HTTPException(status_code=400, detail="Ruolo non valido")
     docs = await db.users.find(
         {"role": role},
-        {"_id": 0, "id": 1, "full_name": 1, "role": 1, "bio": 1, "age": 1, "photo_b64": 1},
+        {"_id": 0, "id": 1, "full_name": 1, "role": 1, "bio": 1, "age": 1,
+         "photo_b64": 1, "role_title": 1, "join_date": 1, "birth_date": 1},
     ).sort([("full_name", 1)]).to_list(200)
-    return [TeamMember(**d) for d in docs]
+    return [TeamMemberExt(**d) for d in docs]
 
 
 # ----- Admin sets/updates photo for any user -----

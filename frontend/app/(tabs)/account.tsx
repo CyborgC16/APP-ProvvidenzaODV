@@ -328,6 +328,7 @@ function AdminDashboard({
         <QuickBtn icon="medkit" label="Pz Dializzati" onPress={() => router.push("/admin/patients")} testID="open-patients" />
         <QuickBtn icon="car" label="Garage" onPress={() => router.push("/admin/garage")} testID="open-garage" />
         <QuickBtn icon="images" label="Foto" onPress={() => router.push("/admin/photos")} testID="open-photos" />
+        <QuickBtn icon="megaphone" label="Avvisi" onPress={() => router.push("/admin/announcements")} testID="open-announcements" />
       </ScrollView>
 
       <ScrollView
@@ -568,6 +569,7 @@ function ProfileEditor({ visible, onClose, onSaved }: { visible: boolean; onClos
   const [bio, setBio] = useState(user?.bio || "");
   const [age, setAge] = useState(user?.age ? String(user.age) : "");
   const [photo, setPhoto] = useState<string | null>(user?.photo_b64 || null);
+  const [notifyEmail, setNotifyEmail] = useState<boolean>(user?.notify_email !== false);
   const [saving, setSaving] = useState(false);
 
   const pick = async () => {
@@ -583,6 +585,7 @@ function ProfileEditor({ visible, onClose, onSaved }: { visible: boolean; onClos
         bio: bio || undefined,
         age: age ? parseInt(age, 10) : undefined,
         photo_b64: photo || undefined,
+        notify_email: notifyEmail,
       });
       await onSaved();
       onClose();
@@ -613,8 +616,30 @@ function ProfileEditor({ visible, onClose, onSaved }: { visible: boolean; onClos
           <TextInput value={fullName} onChangeText={setFullName} style={styles.input} testID="profile-fullname" />
           <Text style={styles.fieldLabel}>Età</Text>
           <TextInput value={age} onChangeText={setAge} keyboardType="numeric" style={styles.input} testID="profile-age" />
-          <Text style={styles.fieldLabel}>Bio</Text>
+          <Text style={styles.fieldLabel}>Bio breve</Text>
           <TextInput value={bio} onChangeText={setBio} multiline style={[styles.input, { height: 90, textAlignVertical: "top" }]} testID="profile-bio" />
+
+          <Pressable
+            onPress={() => setNotifyEmail((p) => !p)}
+            style={styles.toggleRow}
+            testID="toggle-notify-email"
+          >
+            <View style={{ flex: 1 }}>
+              <Text style={styles.toggleTitle}>🔔 Notifiche email avvisi</Text>
+              <Text style={styles.toggleHint}>
+                Ricevi via email gli avvisi pubblicati da master/volontari
+              </Text>
+            </View>
+            <View style={[styles.switch, notifyEmail && styles.switchOn]}>
+              <View style={[styles.switchKnob, notifyEmail && styles.switchKnobOn]} />
+            </View>
+          </Pressable>
+
+          <Text style={styles.hint}>
+            💡 Per aggiungere ruolo, data di ingresso e data di nascita, tocca la tua foto nella pagina
+            &quot;Volontari&quot; o &quot;Servizio Civile&quot; e premi Modifica.
+          </Text>
+
           <View style={{ flexDirection: "row", gap: SPACING.sm, marginTop: SPACING.md }}>
             <Pressable onPress={onClose} style={[styles.btn, styles.btnSec]}>
               <Text style={styles.btnSecText}>Annulla</Text>
@@ -691,6 +716,29 @@ const styles = StyleSheet.create({
   profileAvatarEmpty: { backgroundColor: COLORS.brandLight, alignItems: "center", justifyContent: "center" },
   uploadBtn: { flexDirection: "row", alignItems: "center", gap: 6, backgroundColor: COLORS.brand, paddingHorizontal: 12, paddingVertical: 8, borderRadius: RADIUS.pill },
   uploadBtnText: { color: COLORS.white, fontWeight: "700", fontSize: 13 },
+  toggleRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: SPACING.md,
+    marginTop: SPACING.md,
+    padding: SPACING.md,
+    backgroundColor: COLORS.surfaceSecondary,
+    borderRadius: RADIUS.md,
+  },
+  toggleTitle: { fontSize: 14, fontWeight: "700", color: COLORS.navy },
+  toggleHint: { fontSize: 11, color: COLORS.onSurfaceMuted, marginTop: 2 },
+  switch: {
+    width: 46,
+    height: 26,
+    borderRadius: 13,
+    backgroundColor: COLORS.surfaceTertiary,
+    padding: 2,
+    justifyContent: "center",
+  },
+  switchOn: { backgroundColor: COLORS.brand },
+  switchKnob: { width: 22, height: 22, borderRadius: 11, backgroundColor: COLORS.white },
+  switchKnobOn: { alignSelf: "flex-end" },
+  hint: { fontSize: 12, color: COLORS.onSurfaceMuted, marginTop: SPACING.md, fontStyle: "italic", lineHeight: 17 },
   btn: { flex: 1, paddingVertical: 14, borderRadius: RADIUS.md, alignItems: "center" },
   btnPri: { backgroundColor: COLORS.brand },
   btnPriText: { color: COLORS.white, fontWeight: "700" },

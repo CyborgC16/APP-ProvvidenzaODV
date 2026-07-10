@@ -7,10 +7,13 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { COLORS, SPACING, RADIUS, SHADOW, AMBULANCE_IMAGE } from "@/src/theme";
 import { api, TeamMember } from "@/src/api";
 import { useI18n } from "@/src/i18n";
+import { useAuth } from "@/src/auth";
 import LangToggle from "@/src/components/LangToggle";
+import TeamGrid from "@/src/components/TeamGrid";
 
 export default function Volontari() {
   const { t } = useI18n();
+  const { user } = useAuth();
   const [team, setTeam] = useState<TeamMember[]>([]);
   const [loading, setLoading] = useState(false);
 
@@ -56,22 +59,7 @@ export default function Volontari() {
           ) : team.length === 0 ? (
             <Text style={styles.empty}>Nessun volontario inserito. L&apos;admin li aggiungerà a breve.</Text>
           ) : (
-            <View style={styles.grid}>
-              {team.map((m) => (
-                <View key={m.id} style={styles.photoCard} testID={`vol-${m.id}`}>
-                  {m.photo_b64 ? (
-                    <Image source={{ uri: m.photo_b64 }} style={styles.photo} contentFit="cover" />
-                  ) : (
-                    <View style={[styles.photo, styles.photoEmpty]}>
-                      <Text style={styles.photoInitial}>{m.full_name.charAt(0)}</Text>
-                    </View>
-                  )}
-                  <Text style={styles.photoName} numberOfLines={1}>{m.full_name}</Text>
-                  {m.age ? <Text style={styles.photoRole}>{m.age} anni</Text> : null}
-                  {m.bio ? <Text style={styles.bio} numberOfLines={3}>{m.bio}</Text> : null}
-                </View>
-              ))}
-            </View>
+            <TeamGrid team={team} currentUser={user} onReload={load} />
           )}
 
           <View style={styles.ctaCard}>
