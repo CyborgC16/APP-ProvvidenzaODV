@@ -14,17 +14,21 @@ import { Ionicons } from "@expo/vector-icons";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { COLORS, SPACING, RADIUS, SHADOW } from "@/src/theme";
-import { api, Slot } from "@/src/api";
+import { api, DayAvailability } from "@/src/api";
 
 type Vehicle = "ambulanza" | "furgone";
 type Weight = "normopeso" | "obeso";
 
+const TIME_OPTIONS = ["08:00", "08:30", "09:00", "09:30", "10:00", "10:30", "11:00", "11:30", "12:00", "12:30", "13:00", "13:30", "14:00", "14:30", "15:00", "15:30", "16:00"];
+const WEEKDAY_LABELS = ["Lun", "Mar", "Mer", "Gio", "Ven", "Sab", "Dom"];
+
 export default function Prenota() {
-  const [step, setStep] = useState<1 | 2 | 3 | 4>(1);
+  const [step, setStep] = useState<1 | 2 | 3>(1);
   const [vehicle, setVehicle] = useState<Vehicle | null>(null);
-  const [slots, setSlots] = useState<Slot[]>([]);
-  const [loadingSlots, setLoadingSlots] = useState(false);
-  const [selectedSlot, setSelectedSlot] = useState<Slot | null>(null);
+  const [availability, setAvailability] = useState<DayAvailability[]>([]);
+  const [loadingAvail, setLoadingAvail] = useState(false);
+  const [selectedDate, setSelectedDate] = useState<string | null>(null);
+  const [selectedTime, setSelectedTime] = useState<string | null>(null);
 
   const [requesterName, setRequesterName] = useState("");
   const [requesterSurname, setRequesterSurname] = useState("");
@@ -45,22 +49,28 @@ export default function Prenota() {
 
   useEffect(() => {
     if (step !== 2 || !vehicle) return;
-    setLoadingSlots(true);
-    const today = new Date().toISOString().slice(0, 10);
+    setLoadingAvail(true);
+    setError(null);
     api
-      .listSlots({ vehicle_type: vehicle, date_from: today })
-      .then((data) => setSlots(data.filter((s) => s.booked_count < s.capacity)))
+      .availability(18)
+      .then((data) => setAvailability(data))
       .catch((e) => setError(e.message))
-      .finally(() => setLoadingSlots(false));
+      .finally(() => setLoadingAvail(false));
   }, [step, vehicle]);
 
-  const slotsByDate = useMemo(() => {
-    const grouped: Record<string, Slot[]> = {};
-    for (const s of slots) {
-      (grouped[s.date] ||= []).push(s);
-    }
-    return grouped;
-  }, [slots]);
+  const availableForVehicle = useMemo(() => {
+    if (!vehicle) return [];
+    return availability.filter((d) =>
+      vehicle === "ambulanza" ? d.ambulanza_available > 0 : d.furgone_available > 0,
+    );
+  }, [availability, vehicle]);
+
+  const remainingForSelected = useMemo(() => {
+    if (!selectedDate || !vehicle) return 0;
+    const d = availability.find((a) => a.date === selectedDate);
+    if (!d) return 0;
+    return vehicle === "ambulanza" ? d.ambulanza_available : d.furgone_available;
+  }, [availability, selectedDate, vehicle]);
 
   const canSubmit =
     requesterName.trim() &&
@@ -68,24 +78,25 @@ export default function Prenota() {
     patientName.trim() &&
     patientSurname.trim() &&
     phone.trim() &&
-    email.trim() &&
     address.trim() &&
     hasElevator !== null &&
-    selectedSlot;
+    selectedDate &&
+    selectedTime;
 
   const submit = async () => {
-    if (!selectedSlot || !vehicle) return;
+    if (!selectedDate || !selectedTime || !vehicle) return;
     setSubmitting(true);
     setError(null);
     try {
       const res = await api.createBooking({
-        slot_id: selectedSlot.id,
+        date: selectedDate,
+        time: selectedTime,
         requester_name: requesterName.trim(),
         requester_surname: requesterSurname.trim(),
         patient_name: patientName.trim(),
         patient_surname: patientSurname.trim(),
         phone: phone.trim(),
-        email: email.trim(),
+        email: email.trim() || undefined,
         address: address.trim(),
         vehicle_type: vehicle,
         patient_weight_class: weight,
@@ -105,7 +116,8 @@ export default function Prenota() {
   const resetAll = () => {
     setStep(1);
     setVehicle(null);
-    setSelectedSlot(null);
+    setSelectedDate(null);
+    setSelectedTime(null);
     setRequesterName("");
     setRequesterSurname("");
     setPatientName("");
@@ -131,10 +143,16 @@ export default function Prenota() {
           </View>
           <Text style={styles.successTitle}>Prenotazione Inviata!</Text>
           <Text style={styles.successBody}>
-            Grazie per averci scelto. La sua richiesta è stata inviata ai nostri volontari che la
-            contatteranno al più presto per la conferma.{"\n\n"}
+            Grazie per averci scelto. La sua richiesta è stata inviata ai nostri volontari.{"\n\n"}
             <Text style={{ fontWeight: "700" }}>ID Prenotazione:</Text> {bookingId}
           </Text>
+          <View style={styles.disclaimerBox}>
+            <Ionicons name="information-circle" size={18} color={COLORS.brand} />
+            <Text style={styles.disclaimerText}>
+              Ci riserviamo, per ogni prenotazione ricevuta, di verificare l&apos;effettiva disponibilità
+              del mezzo ed eventualmente di richiamarLa per confermare o meno il servizio.
+            </Text>
+          </View>
           <Pressable testID="new-booking-button" onPress={resetAll} style={styles.primaryBtn}>
             <Text style={styles.primaryBtnText}>Nuova Prenotazione</Text>
           </Pressable>
@@ -206,41 +224,75 @@ export default function Prenota() {
 
           {step === 2 && (
             <View testID="step-slot">
-              <Text style={styles.sectionTitle}>Data e Orario</Text>
+              <Text style={styles.sectionTitle}>Scegli il Giorno</Text>
               <Text style={styles.sectionSubtitle}>
-                Seleziona uno degli slot disponibili impostati dagli amministratori.
+                Disponibili dal lunedì al sabato, prenotazioni fino alle 16:00. Il numero indica i posti
+                ancora liberi per il mezzo scelto.
               </Text>
-              {loadingSlots ? (
+              {loadingAvail ? (
                 <ActivityIndicator color={COLORS.brand} style={{ marginTop: SPACING.xl }} />
-              ) : Object.keys(slotsByDate).length === 0 ? (
+              ) : availableForVehicle.length === 0 ? (
                 <View style={styles.emptyBox}>
                   <Ionicons name="calendar-outline" size={36} color={COLORS.onSurfaceMuted} />
-                  <Text style={styles.emptyText}>Nessuno slot disponibile al momento.</Text>
+                  <Text style={styles.emptyText}>Nessuna disponibilità nei prossimi giorni.</Text>
                   <Text style={styles.emptySubtext}>Riprova più tardi o contattaci telefonicamente.</Text>
                 </View>
               ) : (
-                Object.entries(slotsByDate).map(([date, group]) => (
-                  <View key={date} style={{ marginBottom: SPACING.lg }}>
-                    <Text style={styles.dateLabel}>{formatDate(date)}</Text>
-                    <View style={styles.slotsGrid}>
-                      {group.map((s) => {
-                        const sel = selectedSlot?.id === s.id;
-                        return (
-                          <Pressable
-                            key={s.id}
-                            testID={`slot-${s.id}`}
-                            onPress={() => setSelectedSlot(s)}
-                            style={[styles.slotChip, sel && styles.slotChipSel]}
-                          >
-                            <Text style={[styles.slotChipText, sel && { color: COLORS.white }]}>
-                              {s.time}
+                <>
+                  <View style={styles.dayGrid}>
+                    {availableForVehicle.map((d) => {
+                      const sel = selectedDate === d.date;
+                      const remaining = vehicle === "ambulanza" ? d.ambulanza_available : d.furgone_available;
+                      return (
+                        <Pressable
+                          key={d.date}
+                          testID={`day-${d.date}`}
+                          onPress={() => {
+                            setSelectedDate(d.date);
+                            setSelectedTime(null);
+                          }}
+                          style={[styles.dayCard, sel && styles.dayCardSel]}
+                        >
+                          <Text style={[styles.dayCardWd, sel && { color: COLORS.white }]}>
+                            {WEEKDAY_LABELS[d.weekday]}
+                          </Text>
+                          <Text style={[styles.dayCardDate, sel && { color: COLORS.white }]}>
+                            {formatShortDate(d.date)}
+                          </Text>
+                          <View style={[styles.dayBadge, sel && { backgroundColor: "rgba(255,255,255,0.25)" }]}>
+                            <Text style={[styles.dayBadgeText, sel && { color: COLORS.white }]}>
+                              {remaining} liberi
                             </Text>
-                          </Pressable>
-                        );
-                      })}
-                    </View>
+                          </View>
+                        </Pressable>
+                      );
+                    })}
                   </View>
-                ))
+
+                  {selectedDate ? (
+                    <View style={{ marginTop: SPACING.lg }}>
+                      <Text style={styles.sectionTitle}>Scegli l&apos;Orario</Text>
+                      <Text style={styles.sectionSubtitle}>
+                        {formatDate(selectedDate)} · {remainingForSelected} posti disponibili
+                      </Text>
+                      <View style={styles.slotsGrid}>
+                        {TIME_OPTIONS.map((tm) => {
+                          const sel = selectedTime === tm;
+                          return (
+                            <Pressable
+                              key={tm}
+                              testID={`time-${tm}`}
+                              onPress={() => setSelectedTime(tm)}
+                              style={[styles.slotChip, sel && styles.slotChipSel]}
+                            >
+                              <Text style={[styles.slotChipText, sel && { color: COLORS.white }]}>{tm}</Text>
+                            </Pressable>
+                          );
+                        })}
+                      </View>
+                    </View>
+                  ) : null}
+                </>
               )}
             </View>
           )}
@@ -260,7 +312,7 @@ export default function Prenota() {
               <Row>
                 <Field label="Telefono*" value={phone} onChange={setPhone} keyboardType="phone-pad" testID="input-phone" />
                 <Field
-                  label="Email*"
+                  label="Email (facoltativa)"
                   value={email}
                   onChange={setEmail}
                   keyboardType="email-address"
@@ -268,6 +320,12 @@ export default function Prenota() {
                   testID="input-email"
                 />
               </Row>
+              <View style={styles.inlineNote}>
+                <Ionicons name="call" size={14} color={COLORS.brand} />
+                <Text style={styles.inlineNoteText}>
+                  Il telefono è obbligatorio: potremmo richiamarLa per confermare la disponibilità.
+                </Text>
+              </View>
 
               <Text style={[styles.sectionTitle, { marginTop: SPACING.xl }]}>Dati Paziente</Text>
               <Row>
@@ -290,6 +348,14 @@ export default function Prenota() {
 
               <Field label="Piano" value={floor} onChange={setFloor} keyboardType="numeric" testID="input-floor" />
               <Field label="Note (opzionale)" value={notes} onChange={setNotes} multiline testID="input-notes" />
+
+              <View style={styles.disclaimerBox}>
+                <Ionicons name="information-circle" size={18} color={COLORS.brand} />
+                <Text style={styles.disclaimerText}>
+                  Ci riserviamo, per ogni prenotazione ricevuta, di verificare l&apos;effettiva disponibilità
+                  del mezzo ed eventualmente di richiamarLa per confermare o meno il servizio.
+                </Text>
+              </View>
             </View>
           )}
         </ScrollView>
@@ -298,11 +364,11 @@ export default function Prenota() {
           {step < 3 ? (
             <Pressable
               testID="continue-button"
-              disabled={(step === 1 && !vehicle) || (step === 2 && !selectedSlot)}
+              disabled={(step === 1 && !vehicle) || (step === 2 && (!selectedDate || !selectedTime))}
               onPress={() => setStep((s) => (s + 1) as any)}
               style={[
                 styles.primaryBtn,
-                ((step === 1 && !vehicle) || (step === 2 && !selectedSlot)) && styles.primaryBtnDisabled,
+                ((step === 1 && !vehicle) || (step === 2 && (!selectedDate || !selectedTime))) && styles.primaryBtnDisabled,
               ]}
             >
               <Text style={styles.primaryBtnText}>Continua</Text>
@@ -339,6 +405,14 @@ function formatDate(d: string) {
       month: "long",
       year: "numeric",
     });
+  } catch {
+    return d;
+  }
+}
+
+function formatShortDate(d: string) {
+  try {
+    return new Date(d + "T00:00:00").toLocaleDateString("it-IT", { day: "numeric", month: "short" });
   } catch {
     return d;
   }
@@ -434,6 +508,37 @@ const styles = StyleSheet.create({
   vehicleTitle: { fontSize: 16, fontWeight: "700", color: COLORS.navy },
   vehicleDesc: { fontSize: 13, color: COLORS.onSurfaceMuted, marginTop: 2 },
   dateLabel: { fontSize: 14, fontWeight: "700", color: COLORS.navy, marginBottom: SPACING.sm, textTransform: "capitalize" },
+  dayGrid: { flexDirection: "row", flexWrap: "wrap", gap: SPACING.sm },
+  dayCard: {
+    width: "22%",
+    minWidth: 76,
+    flexGrow: 1,
+    alignItems: "center",
+    paddingVertical: SPACING.md,
+    borderRadius: RADIUS.md,
+    backgroundColor: COLORS.surfaceSecondary,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    ...SHADOW.card,
+  },
+  dayCardSel: { backgroundColor: COLORS.brand, borderColor: COLORS.brand },
+  dayCardWd: { fontSize: 12, fontWeight: "700", color: COLORS.onSurfaceMuted, textTransform: "uppercase" },
+  dayCardDate: { fontSize: 15, fontWeight: "800", color: COLORS.navy, marginTop: 2, textTransform: "capitalize" },
+  dayBadge: { marginTop: 6, backgroundColor: COLORS.brandLight, borderRadius: RADIUS.pill, paddingHorizontal: 8, paddingVertical: 2 },
+  dayBadgeText: { fontSize: 10, fontWeight: "700", color: COLORS.brand },
+  inlineNote: { flexDirection: "row", alignItems: "center", gap: 6, marginTop: -SPACING.xs, marginBottom: SPACING.sm },
+  inlineNoteText: { flex: 1, fontSize: 11, color: COLORS.onSurfaceMuted },
+  disclaimerBox: {
+    flexDirection: "row",
+    gap: SPACING.sm,
+    backgroundColor: COLORS.brandLight,
+    borderRadius: RADIUS.md,
+    padding: SPACING.md,
+    marginTop: SPACING.lg,
+    borderLeftWidth: 4,
+    borderLeftColor: COLORS.brand,
+  },
+  disclaimerText: { flex: 1, fontSize: 12, color: "#5B4636", lineHeight: 18 },
   slotsGrid: { flexDirection: "row", flexWrap: "wrap", gap: SPACING.sm },
   slotChip: {
     paddingHorizontal: SPACING.lg,

@@ -107,22 +107,45 @@ export type Slot = {
 
 export type Booking = {
   id: string;
-  slot_id: string;
   slot_date: string;
   slot_time: string;
   requester_name: string;
-  requester_surname: string;
-  patient_name: string;
-  patient_surname: string;
-  phone: string;
-  email: string;
-  address: string;
+  requester_surname?: string | null;
+  patient_name?: string | null;
+  patient_surname?: string | null;
+  phone?: string | null;
+  email?: string | null;
+  address?: string | null;
   vehicle_type: string;
-  patient_weight_class: string;
-  has_elevator: boolean;
-  floor: number;
+  patient_weight_class?: string | null;
+  has_elevator?: boolean | null;
+  floor?: number | null;
   notes?: string | null;
+  source?: string;
   status: string;
+  cancel_reason?: string | null;
+  cancelled_at?: string | null;
+  created_at: string;
+};
+
+export type DayAvailability = {
+  date: string;
+  weekday: number;
+  open: boolean;
+  ambulanza_capacity: number;
+  ambulanza_booked: number;
+  ambulanza_available: number;
+  furgone_capacity: number;
+  furgone_booked: number;
+  furgone_available: number;
+};
+
+export type NotificationItem = {
+  id: string;
+  title: string;
+  message: string;
+  level: string;
+  read: boolean;
   created_at: string;
 };
 
@@ -333,13 +356,14 @@ export const api = {
 
   // Bookings
   async createBooking(body: {
-    slot_id: string;
+    date: string;
+    time: string;
     requester_name: string;
     requester_surname: string;
     patient_name: string;
     patient_surname: string;
     phone: string;
-    email: string;
+    email?: string;
     address: string;
     vehicle_type: string;
     patient_weight_class: string;
@@ -349,11 +373,45 @@ export const api = {
   }) {
     return request<Booking>("/bookings", { method: "POST", body: JSON.stringify(body), auth: false });
   },
+  async availability(days = 14, date_from?: string) {
+    const qs = new URLSearchParams({ days: String(days), ...(date_from ? { date_from } : {}) }).toString();
+    return request<DayAvailability[]>(`/availability?${qs}`, { auth: false });
+  },
+  async createManualBooking(body: {
+    date: string;
+    time: string;
+    vehicle_type: string;
+    requester_name: string;
+    phone?: string;
+    email?: string;
+    patient_name?: string;
+    address?: string;
+    notes?: string;
+  }) {
+    return request<Booking>("/bookings/manual", { method: "POST", body: JSON.stringify(body) });
+  },
   async listBookings(date?: string) {
     const qs = date ? `?date=${date}` : "";
     return request<Booking[]>(`/bookings${qs}`);
   },
+  async cancelBooking(id: string, reason?: string) {
+    return request<{ ok: boolean; status: string; email_sent: boolean }>(`/bookings/${id}/cancel`, {
+      method: "POST",
+      body: JSON.stringify({ reason: reason || null }),
+    });
+  },
   async deleteBooking(id: string) {
     return request<{ ok: boolean }>(`/bookings/${id}`, { method: "DELETE" });
+  },
+
+  // Notifications (in-app, staff)
+  async listNotifications() {
+    return request<NotificationItem[]>("/notifications");
+  },
+  async markNotificationRead(id: string) {
+    return request<{ ok: boolean }>(`/notifications/${id}/read`, { method: "POST" });
+  },
+  async markAllNotificationsRead() {
+    return request<{ ok: boolean }>("/notifications/read-all", { method: "POST" });
   },
 };

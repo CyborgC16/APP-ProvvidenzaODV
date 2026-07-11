@@ -17,6 +17,7 @@ import { Ionicons } from "@expo/vector-icons";
 
 import { COLORS, SPACING, RADIUS, SHADOW } from "@/src/theme";
 import { api, TeamMember, UserPublic } from "@/src/api";
+import { useAuth } from "@/src/auth";
 import DatePickerField from "@/src/components/DatePickerField";
 
 type Props = {
@@ -43,6 +44,7 @@ function formatItalianDate(iso?: string | null): string | null {
 }
 
 export default function TeamGrid({ team, currentUser, onReload }: Props) {
+  const { refresh } = useAuth();
   const [search, setSearch] = useState("");
   const [selected, setSelected] = useState<TeamMember | null>(null);
   const [editing, setEditing] = useState(false);
@@ -86,26 +88,28 @@ export default function TeamGrid({ team, currentUser, onReload }: Props) {
     if (!selected || !currentUser) return;
     setSaving(true);
     try {
+      const payload = {
+        bio: form.bio,
+        role_title: form.role_title,
+        join_date: form.join_date,
+        birth_date: form.birth_date,
+      };
       if (currentUser.id === selected.id) {
-        await api.updateProfile({
-          bio: form.bio,
-          role_title: form.role_title,
-          join_date: form.join_date,
-          birth_date: form.birth_date,
-        });
+        await api.updateProfile(payload);
+        // keep the logged-in user's own data in sync
+        if (typeof refresh === "function") {
+          await refresh();
+        }
       } else if (currentUser.role === "master") {
-        await api.adminEditBio(selected.id, {
-          bio: form.bio,
-          role_title: form.role_title,
-          join_date: form.join_date,
-          birth_date: form.birth_date,
-        });
+        await api.adminEditBio(selected.id, payload);
       }
       setEditing(false);
       setSelected(null);
-      onReload();
+      if (typeof onReload === "function") {
+        onReload();
+      }
     } catch (e: any) {
-      Alert.alert("Errore", e.message || "Impossibile salvare");
+      Alert.alert("Errore", (e && e.message) || "Impossibile salvare");
     } finally {
       setSaving(false);
     }

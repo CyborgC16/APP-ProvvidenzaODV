@@ -42,11 +42,20 @@ MASTER_PASSWORD = os.environ["MASTER_PASSWORD"]
 
 SMTP_HOST = os.environ["SMTP_HOST"]
 SMTP_PORT = int(os.environ["SMTP_PORT"])
+SMTP_SSL = os.environ.get("SMTP_SSL", "false").lower() in ("1", "true", "yes")
 SMTP_USER = os.environ["SMTP_USER"]
 SMTP_PASSWORD = os.environ["SMTP_PASSWORD"]
 BOOKING_TO_EMAIL = os.environ["BOOKING_TO_EMAIL"]
 BOOKING_CC_EMAIL = os.environ["BOOKING_CC_EMAIL"]
 BOOKING_SUBJECT = os.environ["BOOKING_SUBJECT"]
+
+# ----- Daily booking quota configuration -----
+# From Monday to Saturday (weekday 0=Mon ... 5=Sat, 6=Sun excluded).
+DAILY_CAPACITY = {"ambulanza": 3, "furgone": 2}
+OPEN_WEEKDAYS = {0, 1, 2, 3, 4, 5}  # Mon-Sat
+BOOKING_CUTOFF_TIME = "16:00"  # last bookable time (office closes at 18:00)
+# Statuses that still occupy a daily slot (everything except cancelled).
+ACTIVE_STATUSES = ("pendente", "confermata", "completata")
 
 Role = Literal["master", "admin", "servizio_civile"]
 
@@ -323,10 +332,9 @@ class Slot(BaseModel):
 
 
 class BookingCreateRequest(BaseModel):
-    """Guest booking - independent of admin slots; capacity checked per day."""
-    slot_id: Optional[str] = None  # deprecated but kept for backward compat
+    """Guest booking against automatic daily quota. Phone is mandatory."""
     date: str  # YYYY-MM-DD
-    time: str  # HH:MM (guest-chosen)
+    time: str  # HH:MM (guest-chosen, must be <= cutoff)
     requester_name: str
     requester_surname: str
     patient_name: str
@@ -340,6 +348,13 @@ class BookingCreateRequest(BaseModel):
     floor: int
     notes: Optional[str] = None
 
+    @field_validator("phone")
+    @classmethod
+    def _phone_required(cls, v):
+        if not v or not v.strip():
+            raise ValueError("Il numero di telefono è obbligatorio")
+        return v.strip()
+
     @field_validator("email", mode="before")
     @classmethod
     def _empty_email_to_none(cls, v):
@@ -349,15 +364,23 @@ class BookingCreateRequest(BaseModel):
 
 
 class ManualBookingRequest(BaseModel):
-    """Volunteer records a phone/email booking (occupies a daily quota slot)."""
+    """Volunteer/master records a phone/email booking (occupies a daily quota slot)."""
     date: str
     time: str
     vehicle_type: Literal["ambulanza", "furgone"]
     requester_name: str
     phone: Optional[str] = None
+    email: Optional[EmailStr] = None
     patient_name: Optional[str] = None
     address: Optional[str] = None
     notes: Optional[str] = None
+
+    @field_validator("email", mode="before")
+    @classmethod
+    def _empty_email_to_none(cls, v):
+        if isinstance(v, str) and v.strip() == "":
+            return None
+        return v
 
 
 class CancelBookingRequest(BaseModel):
@@ -366,96 +389,225 @@ class CancelBookingRequest(BaseModel):
 
 class Booking(BaseModel):
     id: str
-    slot_id: str
     slot_date: str
     slot_time: str
     requester_name: str
-    requester_surname: str
-    patient_name: str
-    patient_surname: str
-    phone: str
-    email: EmailStr
-    address: str
+    requester_surname: Optional[str] = None
+    patient_name: Optional[str] = None
+    patient_surname: Optional[str] = None
+    phone: Optional[str] = None
+    email: Optional[EmailStr] = None
+    address: Optional[str] = None
     vehicle_type: str
-    patient_weight_class: str
-    has_elevator: bool
-    floor: int
+    patient_weight_class: Optional[str] = None
+    has_elevator: Optional[bool] = None
+    floor: Optional[int] = None
     notes: Optional[str] = None
+    source: str = "guest"  # "guest" | "manual"
     status: str = "pendente"
+    cancel_reason: Optional[str] = None
+    cancelled_at: Optional[str] = None
+    created_at: str
+
+
+class DayAvailability(BaseModel):
+    date: str
+    weekday: int
+    open: bool
+    ambulanza_capacity: int
+    ambulanza_booked: int
+    ambulanza_available: int
+    furgone_capacity: int
+    furgone_booked: int
+    furgone_available: int
+
+
+class NotificationPublic(BaseModel):
+    id: str
+    title: str
+    message: str
+    level: str = "info"
+    read: bool = False
     created_at: str
 
 
 # ===== Email =====
-def send_booking_email(b: dict) -> bool:
+DISCLAIMER = (
+    "Ci riserviamo, per ogni prenotazione ricevuta, di verificare l'effettiva "
+    "disponibilità del mezzo ed eventualmente di richiamarLa per confermare o meno "
+    "il servizio."
+)
+
+
+def _send_email(subject: str, recipients: List[str], text: str, html: str) -> bool:
+    """Low-level sender that supports both SSL (465) and STARTTLS (587)."""
+    recipients = [r for r in dict.fromkeys([r for r in recipients if r]) ]  # dedupe, drop empties
+    if not recipients:
+        logger.warning("No recipients for email; skipping")
+        return False
     try:
         msg = MIMEMultipart("alternative")
-        msg["Subject"] = BOOKING_SUBJECT
+        msg["Subject"] = subject
         msg["From"] = f"La Provvidenza ODV <{SMTP_USER}>"
-        msg["To"] = BOOKING_TO_EMAIL
-        msg["Cc"] = BOOKING_CC_EMAIL
-        # also send a copy to the requester
-        recipients = [BOOKING_TO_EMAIL, BOOKING_CC_EMAIL]
-        requester_email = (b.get("email") or "").strip()
-        if requester_email and requester_email not in recipients:
-            recipients.append(requester_email)
+        msg["To"] = ", ".join(recipients)
+        msg.attach(MIMEText(text, "plain"))
+        msg.attach(MIMEText(html, "html"))
+        if SMTP_SSL:
+            with smtplib.SMTP_SSL(SMTP_HOST, SMTP_PORT, timeout=20) as server:
+                server.login(SMTP_USER, SMTP_PASSWORD)
+                server.sendmail(SMTP_USER, recipients, msg.as_string())
+        else:
+            with smtplib.SMTP(SMTP_HOST, SMTP_PORT, timeout=20) as server:
+                server.starttls()
+                server.login(SMTP_USER, SMTP_PASSWORD)
+                server.sendmail(SMTP_USER, recipients, msg.as_string())
+        logger.info(f"Email sent: '{subject}' -> {recipients}")
+        return True
+    except Exception as e:
+        logger.error(f"Failed to send email '{subject}': {e}")
+        return False
 
-        vehicle_label = "Ambulanza" if b["vehicle_type"] == "ambulanza" else "Furgone Disabili"
-        elevator = "Sì" if b["has_elevator"] else "No"
-        text = f"""Nuova prenotazione - La Provvidenza ODV
+
+def send_booking_email(b: dict) -> bool:
+    recipients = [BOOKING_TO_EMAIL, BOOKING_CC_EMAIL]
+    requester_email = (b.get("email") or "").strip()
+    if requester_email:
+        recipients.append(requester_email)
+
+    vehicle_label = "Ambulanza" if b["vehicle_type"] == "ambulanza" else "Furgone Disabili"
+    elevator = "Sì" if b.get("has_elevator") else "No"
+    text = f"""Nuova prenotazione - La Provvidenza ODV
 
 Data/Ora: {b['slot_date']} {b['slot_time']}
 Mezzo: {vehicle_label}
 
 PRENOTANTE
-Nome: {b['requester_name']} {b['requester_surname']}
-Telefono: {b['phone']}
-Email: {b['email']}
+Nome: {b.get('requester_name','')} {b.get('requester_surname','') or ''}
+Telefono: {b.get('phone','-')}
+Email: {b.get('email') or '-'}
 
 PAZIENTE
-Nome: {b['patient_name']} {b['patient_surname']}
-Peso: {b['patient_weight_class']}
-Indirizzo: {b['address']}
+Nome: {b.get('patient_name','') or '-'} {b.get('patient_surname','') or ''}
+Peso: {b.get('patient_weight_class') or '-'}
+Indirizzo: {b.get('address') or '-'}
 Ascensore: {elevator}
-Piano: {b['floor']}
+Piano: {b.get('floor') if b.get('floor') is not None else '-'}
 
 Note: {b.get('notes') or '-'}
 ID prenotazione: {b['id']}
+
+{DISCLAIMER}
 """
 
-        html = f"""<html><body style="font-family:Arial,sans-serif;color:#121A26;">
+    html = f"""<html><body style="font-family:Arial,sans-serif;color:#121A26;">
   <div style="background:#FF6B00;padding:16px;color:#fff;">
-    <h2 style="margin:0;">Nuova Prenotazione Servizio</h2>
+    <h2 style="margin:0;">Prenotazione Ricevuta</h2>
     <p style="margin:4px 0 0 0;">La Provvidenza ODV - Marsala</p>
   </div>
   <div style="padding:16px;">
     <p><b>Data/Ora:</b> {b['slot_date']} {b['slot_time']}<br/>
        <b>Mezzo:</b> {vehicle_label}</p>
     <h3 style="color:#1A2E46;border-bottom:1px solid #eee;padding-bottom:4px;">Prenotante</h3>
-    <p><b>Nome:</b> {b['requester_name']} {b['requester_surname']}<br/>
-       <b>Telefono:</b> {b['phone']}<br/>
-       <b>Email:</b> {b['email']}</p>
+    <p><b>Nome:</b> {b.get('requester_name','')} {b.get('requester_surname','') or ''}<br/>
+       <b>Telefono:</b> {b.get('phone','-')}<br/>
+       <b>Email:</b> {b.get('email') or '-'}</p>
     <h3 style="color:#1A2E46;border-bottom:1px solid #eee;padding-bottom:4px;">Paziente</h3>
-    <p><b>Nome:</b> {b['patient_name']} {b['patient_surname']}<br/>
-       <b>Peso:</b> {b['patient_weight_class']}<br/>
-       <b>Indirizzo:</b> {b['address']}<br/>
-       <b>Ascensore:</b> {elevator} - <b>Piano:</b> {b['floor']}</p>
+    <p><b>Nome:</b> {b.get('patient_name','') or '-'} {b.get('patient_surname','') or ''}<br/>
+       <b>Peso:</b> {b.get('patient_weight_class') or '-'}<br/>
+       <b>Indirizzo:</b> {b.get('address') or '-'}<br/>
+       <b>Ascensore:</b> {elevator} - <b>Piano:</b> {b.get('floor') if b.get('floor') is not None else '-'}</p>
     <p><b>Note:</b> {b.get('notes') or '-'}</p>
+    <p style="color:#888;font-size:12px;">ID prenotazione: {b['id']}</p>
+    <div style="background:#FFF0E5;border-left:4px solid #FF6B00;padding:10px 14px;margin-top:12px;border-radius:6px;">
+      <p style="margin:0;font-size:13px;color:#5B4636;">{DISCLAIMER}</p>
+    </div>
+  </div>
+</body></html>"""
+    return _send_email(BOOKING_SUBJECT, recipients, text, html)
+
+
+def send_cancellation_email(b: dict, reason: Optional[str]) -> bool:
+    requester_email = (b.get("email") or "").strip()
+    recipients = [BOOKING_TO_EMAIL]
+    if requester_email:
+        recipients.append(requester_email)
+    vehicle_label = "Ambulanza" if b["vehicle_type"] == "ambulanza" else "Furgone Disabili"
+    reason_line = f"\nMotivo: {reason}" if reason else ""
+    text = f"""Prenotazione ANNULLATA - La Provvidenza ODV
+
+Gentile {b.get('requester_name','')},
+la informiamo che la sua prenotazione del {b['slot_date']} alle {b['slot_time']} ({vehicle_label}) è stata ANNULLATA.{reason_line}
+
+Per qualsiasi chiarimento può contattarci allo 0923 1234567 o rispondere a questa email.
+ID prenotazione: {b['id']}
+
+La Provvidenza ODV - Marsala
+"""
+    html = f"""<html><body style="font-family:Arial,sans-serif;color:#121A26;">
+  <div style="background:#DC3545;padding:16px;color:#fff;">
+    <h2 style="margin:0;">Prenotazione Annullata</h2>
+    <p style="margin:4px 0 0 0;">La Provvidenza ODV - Marsala</p>
+  </div>
+  <div style="padding:16px;">
+    <p>Gentile <b>{b.get('requester_name','')}</b>,</p>
+    <p>la informiamo che la sua prenotazione è stata <b style="color:#DC3545;">ANNULLATA</b>.</p>
+    <p><b>Data/Ora:</b> {b['slot_date']} {b['slot_time']}<br/>
+       <b>Mezzo:</b> {vehicle_label}</p>
+    {f'<p><b>Motivo:</b> {reason}</p>' if reason else ''}
+    <p style="font-size:13px;color:#5B6776;">Per qualsiasi chiarimento può contattarci telefonicamente o rispondere a questa email.</p>
     <p style="color:#888;font-size:12px;">ID prenotazione: {b['id']}</p>
   </div>
 </body></html>"""
+    return _send_email("Prenotazione annullata - La Provvidenza ODV", recipients, text, html)
 
-        msg.attach(MIMEText(text, "plain"))
-        msg.attach(MIMEText(html, "html"))
 
-        with smtplib.SMTP(SMTP_HOST, SMTP_PORT) as server:
-            server.starttls()
-            server.login(SMTP_USER, SMTP_PASSWORD)
-            server.sendmail(SMTP_USER, recipients, msg.as_string())
-        logger.info(f"Booking email sent for booking_id={b['id']}")
-        return True
-    except Exception as e:
-        logger.error(f"Failed to send booking email: {e}")
-        return False
+# ===== Notifications & quota helpers =====
+async def create_notification(user_id: str, title: str, message: str, level: str = "info"):
+    doc = {
+        "id": str(uuid.uuid4()),
+        "user_id": user_id,
+        "title": title,
+        "message": message,
+        "level": level,
+        "read": False,
+        "created_at": datetime.now(timezone.utc).isoformat(),
+    }
+    await db.notifications.insert_one(doc)
+
+
+async def notify_staff(title: str, message: str, level: str = "info"):
+    """Create an in-app notification for every master/admin (volunteers) user."""
+    staff = await db.users.find({"role": {"$in": ["master", "admin"]}}, {"_id": 0, "id": 1}).to_list(500)
+    for s in staff:
+        await create_notification(s["id"], title, message, level)
+
+
+def _parse_date(d: str) -> datetime:
+    return datetime.strptime(d, "%Y-%m-%d")
+
+
+def validate_booking_day_time(date_str: str, time_str: str):
+    """Raise HTTPException if the requested day/time is outside the booking window."""
+    try:
+        day = _parse_date(date_str)
+    except Exception:
+        raise HTTPException(status_code=400, detail="Data non valida")
+    if day.weekday() not in OPEN_WEEKDAYS:
+        raise HTTPException(status_code=400, detail="Le prenotazioni sono disponibili solo da lunedì a sabato")
+    # not in the past
+    today = datetime.now().date()
+    if day.date() < today:
+        raise HTTPException(status_code=400, detail="Non è possibile prenotare per una data passata")
+    if time_str > BOOKING_CUTOFF_TIME:
+        raise HTTPException(status_code=400, detail=f"Le prenotazioni sono accettate fino alle {BOOKING_CUTOFF_TIME}")
+
+
+async def count_active_bookings(date_str: str, vehicle_type: str) -> int:
+    return await db.bookings.count_documents({
+        "slot_date": date_str,
+        "vehicle_type": vehicle_type,
+        "status": {"$in": list(ACTIVE_STATUSES)},
+    })
 
 
 # ===== Seed master account =====
@@ -715,23 +867,53 @@ async def my_slots(user: dict = Depends(require_role("servizio_civile", "admin",
     return [Slot(**d) for d in docs]
 
 
+# ----- Availability (public) -----
+@api_router.get("/availability", response_model=List[DayAvailability])
+async def availability(date_from: Optional[str] = None, days: int = 14):
+    """Public: daily availability for the next `days` open days (Mon-Sat)."""
+    start = datetime.now().date() if not date_from else _parse_date(date_from).date()
+    result: List[DayAvailability] = []
+    d = start
+    checked = 0
+    # iterate calendar days, include only open weekdays, up to `days` open days
+    while len([r for r in result]) < days and checked < 60:
+        checked += 1
+        wd = d.weekday()
+        if wd in OPEN_WEEKDAYS:
+            ds = d.isoformat()
+            amb_booked = await count_active_bookings(ds, "ambulanza")
+            fur_booked = await count_active_bookings(ds, "furgone")
+            amb_cap = DAILY_CAPACITY["ambulanza"]
+            fur_cap = DAILY_CAPACITY["furgone"]
+            result.append(DayAvailability(
+                date=ds,
+                weekday=wd,
+                open=True,
+                ambulanza_capacity=amb_cap,
+                ambulanza_booked=amb_booked,
+                ambulanza_available=max(0, amb_cap - amb_booked),
+                furgone_capacity=fur_cap,
+                furgone_booked=fur_booked,
+                furgone_available=max(0, fur_cap - fur_booked),
+            ))
+        d = d + timedelta(days=1)
+    return result
+
+
 # ----- Bookings -----
 @api_router.post("/bookings", response_model=Booking)
 async def create_booking(body: BookingCreateRequest, background: BackgroundTasks):
-    """Public endpoint: guests can book without authentication."""
-    slot = await db.slots.find_one({"id": body.slot_id}, {"_id": 0})
-    if not slot:
-        raise HTTPException(status_code=404, detail="Slot non disponibile")
-    if slot["booked_count"] >= slot["capacity"]:
-        raise HTTPException(status_code=400, detail="Slot esaurito")
-    if slot["vehicle_type"] != body.vehicle_type:
-        raise HTTPException(status_code=400, detail="Tipo di mezzo non coincide con lo slot")
+    """Public endpoint: guests book against the automatic daily quota (Mon-Sat, until 16:00)."""
+    validate_booking_day_time(body.date, body.time)
+    booked = await count_active_bookings(body.date, body.vehicle_type)
+    capacity = DAILY_CAPACITY[body.vehicle_type]
+    if booked >= capacity:
+        raise HTTPException(status_code=400, detail="Nessuna disponibilità per questo giorno e mezzo. Scelga un'altra data.")
 
     booking_doc = {
         "id": str(uuid.uuid4()),
-        "slot_id": body.slot_id,
-        "slot_date": slot["date"],
-        "slot_time": slot["time"],
+        "slot_date": body.date,
+        "slot_time": body.time,
         "requester_name": body.requester_name,
         "requester_surname": body.requester_surname,
         "patient_name": body.patient_name,
@@ -744,28 +926,108 @@ async def create_booking(body: BookingCreateRequest, background: BackgroundTasks
         "has_elevator": body.has_elevator,
         "floor": body.floor,
         "notes": body.notes,
+        "source": "guest",
         "status": "pendente",
+        "cancel_reason": None,
+        "cancelled_at": None,
         "created_at": datetime.now(timezone.utc).isoformat(),
     }
     await db.bookings.insert_one(booking_doc)
-    await db.slots.update_one({"id": body.slot_id}, {"$inc": {"booked_count": 1}})
-
-    # send email in background so booking creation isn't blocked
     booking_clean = {k: v for k, v in booking_doc.items() if k != "_id"}
+
+    vehicle_label = "Ambulanza" if body.vehicle_type == "ambulanza" else "Furgone Disabili"
     background.add_task(send_booking_email, booking_clean)
+    await notify_staff(
+        "Nuova prenotazione",
+        f"{body.requester_name} {body.requester_surname} · {vehicle_label} · {body.date} {body.time} · Tel: {body.phone}",
+        "info",
+    )
+    return Booking(**booking_clean)
+
+
+@api_router.post("/bookings/manual", response_model=Booking)
+async def create_manual_booking(body: ManualBookingRequest, user: dict = Depends(require_role("master", "admin"))):
+    """Volunteer/master occupies a daily quota slot for a phone/email request."""
+    validate_booking_day_time(body.date, body.time)
+    booked = await count_active_bookings(body.date, body.vehicle_type)
+    capacity = DAILY_CAPACITY[body.vehicle_type]
+    if booked >= capacity:
+        raise HTTPException(status_code=400, detail="Nessuna disponibilità per questo giorno e mezzo.")
+
+    booking_doc = {
+        "id": str(uuid.uuid4()),
+        "slot_date": body.date,
+        "slot_time": body.time,
+        "requester_name": body.requester_name,
+        "requester_surname": None,
+        "patient_name": body.patient_name,
+        "patient_surname": None,
+        "phone": body.phone,
+        "email": body.email,
+        "address": body.address,
+        "vehicle_type": body.vehicle_type,
+        "patient_weight_class": None,
+        "has_elevator": None,
+        "floor": None,
+        "notes": body.notes,
+        "source": "manual",
+        "status": "confermata",
+        "cancel_reason": None,
+        "cancelled_at": None,
+        "created_at": datetime.now(timezone.utc).isoformat(),
+    }
+    await db.bookings.insert_one(booking_doc)
+    booking_clean = {k: v for k, v in booking_doc.items() if k != "_id"}
     return Booking(**booking_clean)
 
 
 @api_router.get("/bookings", response_model=List[Booking])
 async def list_bookings(
     date: Optional[str] = None,
+    include_cancelled: bool = True,
     user: dict = Depends(require_role("master", "admin")),
 ):
     q: dict = {}
     if date:
         q["slot_date"] = date
+    if not include_cancelled:
+        q["status"] = {"$in": list(ACTIVE_STATUSES)}
     docs = await db.bookings.find(q, {"_id": 0}).sort([("slot_date", 1), ("slot_time", 1)]).to_list(2000)
     return [Booking(**d) for d in docs]
+
+
+@api_router.post("/bookings/{booking_id}/cancel")
+async def cancel_booking(
+    booking_id: str,
+    body: CancelBookingRequest,
+    background: BackgroundTasks,
+    user: dict = Depends(require_role("master", "admin")),
+):
+    """Master/volunteers cancel a booking; frees the daily slot and notifies the requester by email."""
+    booking = await db.bookings.find_one({"id": booking_id}, {"_id": 0})
+    if not booking:
+        raise HTTPException(status_code=404, detail="Prenotazione non trovata")
+    if booking.get("status") == "annullata":
+        raise HTTPException(status_code=400, detail="Prenotazione già annullata")
+    await db.bookings.update_one(
+        {"id": booking_id},
+        {"$set": {
+            "status": "annullata",
+            "cancel_reason": body.reason,
+            "cancelled_at": datetime.now(timezone.utc).isoformat(),
+        }},
+    )
+    booking["cancel_reason"] = body.reason
+    # notify requester by email (background)
+    if booking.get("email"):
+        background.add_task(send_cancellation_email, booking, body.reason)
+    # in-app notification for staff
+    await notify_staff(
+        "Prenotazione annullata",
+        f"{booking.get('requester_name','')} · {booking['slot_date']} {booking['slot_time']} annullata da {user['full_name']}",
+        "warning",
+    )
+    return {"ok": True, "status": "annullata", "email_sent": bool(booking.get("email"))}
 
 
 @api_router.patch("/bookings/{booking_id}/status")
@@ -788,8 +1050,28 @@ async def delete_booking(booking_id: str, user: dict = Depends(require_role("mas
     if not booking:
         raise HTTPException(status_code=404, detail="Prenotazione non trovata")
     await db.bookings.delete_one({"id": booking_id})
-    await db.slots.update_one({"id": booking["slot_id"]}, {"$inc": {"booked_count": -1}})
     return {"ok": True}
+
+
+# ----- Notifications (in-app, for logged-in staff) -----
+@api_router.get("/notifications", response_model=List[NotificationPublic])
+async def list_notifications(user: dict = Depends(get_current_user)):
+    docs = await db.notifications.find({"user_id": user["id"]}, {"_id": 0}).sort([("created_at", -1)]).to_list(100)
+    return [NotificationPublic(**d) for d in docs]
+
+
+@api_router.post("/notifications/{notif_id}/read")
+async def mark_notification_read(notif_id: str, user: dict = Depends(get_current_user)):
+    await db.notifications.update_one({"id": notif_id, "user_id": user["id"]}, {"$set": {"read": True}})
+    return {"ok": True}
+
+
+@api_router.post("/notifications/read-all")
+async def mark_all_notifications_read(user: dict = Depends(get_current_user)):
+    await db.notifications.update_many({"user_id": user["id"], "read": False}, {"$set": {"read": True}})
+    return {"ok": True}
+
+
 
 
 # ----- Test SMTP -----
@@ -894,7 +1176,7 @@ async def _send_announcement_emails(title: str, message: str, level: str, expire
                   </div>
                 </div>
                 """
-                send_email(u["email"], subject, html)
+                _send_email(subject, [u["email"]], message, html)
             except Exception as ex:
                 logger.warning(f"announcement email failed for {u.get('email')}: {ex}")
     except Exception as ex:

@@ -11,6 +11,7 @@ import {
   Platform,
   RefreshControl,
   Modal,
+  Alert,
 } from "react-native";
 import { useRouter, useFocusEffect } from "expo-router";
 import { Image } from "expo-image";
@@ -19,9 +20,11 @@ import { SafeAreaView } from "react-native-safe-area-context";
 
 import { COLORS, SPACING, RADIUS, SHADOW, LOGO_URL } from "@/src/theme";
 import { useAuth } from "@/src/auth";
-import { api, Booking, Slot } from "@/src/api";
+import { api, Booking, Slot, DayAvailability } from "@/src/api";
 import { useI18n } from "@/src/i18n";
 import LangToggle from "@/src/components/LangToggle";
+import NotificationsBell from "@/src/components/NotificationsBell";
+import ManualBookingModal from "@/src/components/ManualBookingModal";
 import { pickImageBase64 } from "@/src/utils/picker";
 
 export default function Account() {
@@ -250,18 +253,19 @@ function AdminDashboard({
 }) {
   const router = useRouter();
   const [date, setDate] = useState<string>(new Date().toISOString().slice(0, 10));
-  const [slots, setSlots] = useState<Slot[]>([]);
+  const [avail, setAvail] = useState<DayAvailability | null>(null);
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [loading, setLoading] = useState(false);
+  const [showManual, setShowManual] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const [s, b] = await Promise.all([
-        api.listSlots({ date_from: date, date_to: date }),
+      const [a, b] = await Promise.all([
+        api.availability(1, date).catch(() => []),
         api.listBookings(date),
       ]);
-      setSlots(s);
+      setAvail(a && a.length ? a[0] : null);
       setBookings(b);
     } catch (e) {
       console.warn(e);
@@ -278,13 +282,41 @@ function AdminDashboard({
 
   const dateOptions = nextNDays(14);
 
-  const deleteSlot = async (id: string) => {
-    await api.deleteSlot(id);
-    load();
-  };
   const deleteBooking = async (id: string) => {
     await api.deleteBooking(id);
     load();
+  };
+
+  const cancelBooking = (b: Booking) => {
+    if (b.status === "annullata") return;
+    const doCancel = async (reason?: string) => {
+      try {
+        await api.cancelBooking(b.id, reason);
+        load();
+      } catch (e: any) {
+        Alert.alert("Errore", (e && e.message) || "Impossibile annullare");
+      }
+    };
+    if (typeof Alert.prompt === "function") {
+      Alert.prompt(
+        "Annulla prenotazione",
+        "Motivo (facoltativo). Verrà inviata email di annullamento se disponibile.",
+        [
+          { text: "Indietro", style: "cancel" },
+          { text: "Annulla prenotazione", style: "destructive", onPress: (reason?: string) => doCancel(reason) },
+        ],
+        "plain-text",
+      );
+    } else {
+      Alert.alert(
+        "Annulla prenotazione",
+        "Confermi l'annullamento? Verrà inviata email di annullamento al prenotante (se disponibile).",
+        [
+          { text: "Indietro", style: "cancel" },
+          { text: "Annulla prenotazione", style: "destructive", onPress: () => doCancel() },
+        ],
+      );
+    }
   };
 
   return (
@@ -304,6 +336,7 @@ function AdminDashboard({
           </Text>
         </View>
         <LangToggle />
+        <NotificationsBell />
         <Pressable onPress={onOpenProfile} hitSlop={10} testID="open-admin-profile" style={styles.iconBtn}>
           <Ionicons name="create-outline" size={22} color={COLORS.navy} />
         </Pressable>
@@ -322,7 +355,7 @@ function AdminDashboard({
         style={styles.quickRow}
       >
         <QuickBtn icon="people" label="Utenti" onPress={onOpenUsers} testID="open-users-btn" />
-        <QuickBtn icon="add-circle" label="Nuovo Slot" onPress={onNewSlot} testID="new-slot-btn-q" />
+        <QuickBtn icon="call" label="Prenota Manuale" onPress={() => setShowManual(true)} testID="manual-booking-btn-q" />
         <QuickBtn icon="time" label="Nuovo Turno" onPress={onNewShift} testID="new-shift-btn" />
         <QuickBtn icon="list" label="Tutti i Turni" onPress={() => router.push("/admin/shifts")} testID="open-shifts" />
         <QuickBtn icon="medkit" label="Pz Dializzati" onPress={() => router.push("/admin/patients")} testID="open-patients" />
@@ -358,34 +391,27 @@ function AdminDashboard({
         refreshControl={<RefreshControl refreshing={loading} onRefresh={load} tintColor={COLORS.brand} />}
       >
         <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle}>Slot ({slots.length})</Text>
+          <Text style={styles.sectionTitle}>Disponibilità del giorno</Text>
         </View>
-        {slots.length === 0 ? (
-          <Text style={styles.emptyText}>Nessuno slot per questa data. Aggiungine uno dal pulsante &quot;+&quot;.</Text>
-        ) : (
-          slots.map((s) => (
-            <View key={s.id} style={styles.itemCard} testID={`admin-slot-${s.id}`}>
-              <View style={[styles.itemIcon, { backgroundColor: COLORS.brandLight }]}>
-                <Ionicons
-                  name={s.vehicle_type === "ambulanza" ? "medical" : "accessibility"}
-                  size={20}
-                  color={COLORS.brand}
-                />
-              </View>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.itemTitle}>
-                  {s.time} · {s.vehicle_type === "ambulanza" ? "Ambulanza" : "Furgone"}
-                </Text>
-                <Text style={styles.itemSub}>
-                  Prenotati {s.booked_count}/{s.capacity}
-                  {s.notes ? ` · ${s.notes}` : ""}
-                </Text>
-              </View>
-              <Pressable onPress={() => deleteSlot(s.id)} testID={`del-slot-${s.id}`} hitSlop={8}>
-                <Ionicons name="trash-outline" size={20} color={COLORS.error} />
-              </Pressable>
+        {avail ? (
+          <View style={styles.availRow}>
+            <View style={styles.availCard} testID="avail-ambulanza">
+              <Ionicons name="medical" size={22} color={COLORS.brand} />
+              <Text style={styles.availNum}>
+                {avail.ambulanza_available}/{avail.ambulanza_capacity}
+              </Text>
+              <Text style={styles.availLabel}>Ambulanze libere</Text>
             </View>
-          ))
+            <View style={styles.availCard} testID="avail-furgone">
+              <Ionicons name="accessibility" size={22} color={COLORS.brand} />
+              <Text style={styles.availNum}>
+                {avail.furgone_available}/{avail.furgone_capacity}
+              </Text>
+              <Text style={styles.availLabel}>Trasporti disabili liberi</Text>
+            </View>
+          </View>
+        ) : (
+          <Text style={styles.emptyText}>Giorno chiuso (domenica): nessuna prenotazione disponibile.</Text>
         )}
 
         <View style={[styles.sectionHeader, { marginTop: SPACING.xl }]}>
@@ -394,45 +420,74 @@ function AdminDashboard({
         {bookings.length === 0 ? (
           <Text style={styles.emptyText}>Nessuna prenotazione per questa data.</Text>
         ) : (
-          bookings.map((b) => (
-            <View key={b.id} style={styles.bookingCard} testID={`admin-booking-${b.id}`}>
-              <View style={styles.bookingHeader}>
-                <Text style={styles.bookingTime}>
-                  {b.slot_time} · {b.vehicle_type === "ambulanza" ? "Ambulanza" : "Furgone"}
+          bookings.map((b) => {
+            const cancelled = b.status === "annullata";
+            const badgeColor = cancelled ? COLORS.error : b.status === "confermata" ? COLORS.success : COLORS.brand;
+            return (
+              <View key={b.id} style={[styles.bookingCard, cancelled && { opacity: 0.6 }]} testID={`admin-booking-${b.id}`}>
+                <View style={styles.bookingHeader}>
+                  <Text style={styles.bookingTime}>
+                    {b.slot_time} · {b.vehicle_type === "ambulanza" ? "Ambulanza" : "Furgone"}
+                  </Text>
+                  <View style={[styles.statusBadge, { backgroundColor: badgeColor }]}>
+                    <Text style={[styles.statusBadgeText, { color: COLORS.white }]}>{b.status}</Text>
+                  </View>
+                </View>
+                {b.source === "manual" ? (
+                  <Text style={styles.sourceTag}>📞 Registrata da volontario</Text>
+                ) : null}
+                <Text style={styles.bookingName}>
+                  {b.requester_name}
+                  {b.requester_surname ? ` ${b.requester_surname}` : ""}
                 </Text>
-                <View style={[styles.statusBadge, { backgroundColor: COLORS.brandLight }]}>
-                  <Text style={[styles.statusBadgeText, { color: COLORS.brand }]}>{b.status}</Text>
+                {b.patient_name ? (
+                  <Text style={styles.bookingMeta}>Paziente: {b.patient_name} {b.patient_surname || ""}</Text>
+                ) : null}
+                {b.address ? <Text style={styles.bookingMeta}>{b.address}</Text> : null}
+                <Text style={styles.bookingMeta}>
+                  Tel: {b.phone || "-"}{b.email ? ` · Email: ${b.email}` : ""}
+                </Text>
+                {b.floor !== null && b.floor !== undefined ? (
+                  <Text style={styles.bookingMeta}>
+                    Piano {b.floor} · Ascensore: {b.has_elevator ? "Sì" : "No"}
+                    {b.patient_weight_class ? ` · ${b.patient_weight_class}` : ""}
+                  </Text>
+                ) : null}
+                {b.notes ? <Text style={styles.bookingMeta}>Note: {b.notes}</Text> : null}
+                {cancelled && b.cancel_reason ? (
+                  <Text style={[styles.bookingMeta, { color: COLORS.error }]}>Motivo annullamento: {b.cancel_reason}</Text>
+                ) : null}
+
+                <View style={styles.bookingActions}>
+                  {!cancelled ? (
+                    <Pressable onPress={() => cancelBooking(b)} testID={`cancel-booking-${b.id}`} style={styles.cancelBtn}>
+                      <Ionicons name="close-circle-outline" size={16} color={COLORS.white} />
+                      <Text style={styles.cancelBtnText}>Annulla</Text>
+                    </Pressable>
+                  ) : null}
+                  <Pressable onPress={() => deleteBooking(b.id)} testID={`del-booking-${b.id}`} style={styles.delLinkBtn}>
+                    <Ionicons name="trash-outline" size={16} color={COLORS.error} />
+                    <Text style={styles.delLinkText}>Elimina</Text>
+                  </Pressable>
                 </View>
               </View>
-              <Text style={styles.bookingName}>
-                Paziente: {b.patient_name} {b.patient_surname}
-              </Text>
-              <Text style={styles.bookingMeta}>{b.address}</Text>
-              <Text style={styles.bookingMeta}>
-                Tel: {b.phone} · Email: {b.email}
-              </Text>
-              <Text style={styles.bookingMeta}>
-                Piano {b.floor} · Ascensore: {b.has_elevator ? "Sì" : "No"} · {b.patient_weight_class}
-              </Text>
-              {b.notes ? <Text style={styles.bookingMeta}>Note: {b.notes}</Text> : null}
-              <Pressable
-                onPress={() => deleteBooking(b.id)}
-                testID={`del-booking-${b.id}`}
-                style={styles.delLinkBtn}
-              >
-                <Ionicons name="trash-outline" size={16} color={COLORS.error} />
-                <Text style={styles.delLinkText}>Elimina prenotazione</Text>
-              </Pressable>
-            </View>
-          ))
+            );
+          })
         )}
 
         <View style={{ height: 100 }} />
       </ScrollView>
 
-      <Pressable onPress={onNewSlot} testID="new-slot-fab" style={styles.fab}>
+      <Pressable onPress={() => setShowManual(true)} testID="manual-booking-fab" style={styles.fab}>
         <Ionicons name="add" size={28} color={COLORS.white} />
       </Pressable>
+
+      <ManualBookingModal
+        visible={showManual}
+        date={date}
+        onClose={() => setShowManual(false)}
+        onSaved={load}
+      />
     </SafeAreaView>
   );
 }
@@ -589,6 +644,8 @@ function ProfileEditor({ visible, onClose, onSaved }: { visible: boolean; onClos
       });
       await onSaved();
       onClose();
+    } catch (e: any) {
+      Alert.alert("Errore", (e && e.message) || "Impossibile salvare il profilo");
     } finally {
       setSaving(false);
     }
@@ -796,6 +853,30 @@ const styles = StyleSheet.create({
   bookingMeta: { fontSize: 12, color: COLORS.onSurfaceMuted, marginTop: 2 },
   delLinkBtn: { flexDirection: "row", alignItems: "center", gap: 4, marginTop: SPACING.sm },
   delLinkText: { fontSize: 12, color: COLORS.error, fontWeight: "600" },
+  availRow: { flexDirection: "row", gap: SPACING.md },
+  availCard: {
+    flex: 1,
+    alignItems: "center",
+    backgroundColor: COLORS.surfaceSecondary,
+    borderRadius: RADIUS.md,
+    padding: SPACING.lg,
+    gap: 4,
+    ...SHADOW.card,
+  },
+  availNum: { fontSize: 22, fontWeight: "800", color: COLORS.navy },
+  availLabel: { fontSize: 11, color: COLORS.onSurfaceMuted, textAlign: "center" },
+  sourceTag: { fontSize: 11, color: COLORS.brand, fontWeight: "700", marginBottom: 2 },
+  bookingActions: { flexDirection: "row", alignItems: "center", gap: SPACING.md, marginTop: SPACING.sm },
+  cancelBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    backgroundColor: COLORS.error,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: RADIUS.pill,
+  },
+  cancelBtnText: { color: COLORS.white, fontWeight: "700", fontSize: 12 },
   fab: {
     position: "absolute",
     bottom: SPACING.xl,

@@ -19,7 +19,7 @@ const EMERGENCY_112 = "112";
 export default function Home() {
   const router = useRouter();
   const { t } = useI18n();
-  const { width } = useWindowDimensions();
+  const { width, height } = useWindowDimensions();
   const [photos, setPhotos] = useState<GalleryPhoto[]>([]);
   const listRef = useRef<FlatList<GalleryPhoto>>(null);
   const indexRef = useRef(0);
@@ -191,9 +191,9 @@ export default function Home() {
           </View>
         )}
 
-        {/* About - full width edge-to-edge, natural aspect */}
+        {/* About - full screen portrait, edge-to-edge, no borders */}
         <View testID="about-card">
-          <Image source={{ uri: ABOUT_IMAGE }} style={styles.aboutImage} contentFit="contain" />
+          <Image source={{ uri: ABOUT_IMAGE }} style={[styles.aboutImage, { width, height }]} contentFit="cover" />
         </View>
 
         <View style={{ height: SPACING.xl }} />
@@ -337,6 +337,6 @@ const styles = StyleSheet.create({
     fontWeight: "600",
   },
 
-  // About edge-to-edge - portrait aspect (1080x1920 → 9:16)
-  aboutImage: { width: "100%", aspectRatio: 9 / 16, backgroundColor: COLORS.white },
+  // About edge-to-edge - full screen portrait, no borders
+  aboutImage: { alignSelf: "center" },
 });
