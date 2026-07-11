@@ -323,19 +323,45 @@ class Slot(BaseModel):
 
 
 class BookingCreateRequest(BaseModel):
-    slot_id: str
+    """Guest booking - independent of admin slots; capacity checked per day."""
+    slot_id: Optional[str] = None  # deprecated but kept for backward compat
+    date: str  # YYYY-MM-DD
+    time: str  # HH:MM (guest-chosen)
     requester_name: str
     requester_surname: str
     patient_name: str
     patient_surname: str
     phone: str
-    email: EmailStr
+    email: Optional[EmailStr] = None
     address: str
     vehicle_type: Literal["ambulanza", "furgone"]
     patient_weight_class: Literal["normopeso", "obeso"]
     has_elevator: bool
     floor: int
     notes: Optional[str] = None
+
+    @field_validator("email", mode="before")
+    @classmethod
+    def _empty_email_to_none(cls, v):
+        if isinstance(v, str) and v.strip() == "":
+            return None
+        return v
+
+
+class ManualBookingRequest(BaseModel):
+    """Volunteer records a phone/email booking (occupies a daily quota slot)."""
+    date: str
+    time: str
+    vehicle_type: Literal["ambulanza", "furgone"]
+    requester_name: str
+    phone: Optional[str] = None
+    patient_name: Optional[str] = None
+    address: Optional[str] = None
+    notes: Optional[str] = None
+
+
+class CancelBookingRequest(BaseModel):
+    reason: Optional[str] = None
 
 
 class Booking(BaseModel):
