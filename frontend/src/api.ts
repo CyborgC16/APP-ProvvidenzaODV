@@ -176,8 +176,31 @@ export const api = {
       body: JSON.stringify({ current_password, new_password }),
     });
   },
-  async updateProfile(body: { full_name?: string; bio?: string; age?: number; photo_b64?: string }) {
+  async updateProfile(body: {
+    full_name?: string;
+    bio?: string;
+    age?: number;
+    photo_b64?: string;
+    role_title?: string;
+    join_date?: string;
+    birth_date?: string;
+    notify_email?: boolean;
+  }) {
     return request<UserPublic>("/auth/profile", { method: "PATCH", body: JSON.stringify(body) });
+  },
+  async adminEditBio(userId: string, body: { bio?: string; role_title?: string; join_date?: string; birth_date?: string }) {
+    return request<UserPublic>(`/users/${userId}/bio`, { method: "PATCH", body: JSON.stringify(body) });
+  },
+
+  // Announcements
+  async listAnnouncements() {
+    return request<Announcement[]>("/announcements");
+  },
+  async createAnnouncement(body: { title: string; message: string; level: "info" | "warning" | "danger"; expires_at: string }) {
+    return request<Announcement>("/announcements", { method: "POST", body: JSON.stringify(body) });
+  },
+  async deleteAnnouncement(id: string) {
+    return request<{ ok: boolean }>(`/announcements/${id}`, { method: "DELETE" });
   },
 
   // Shifts

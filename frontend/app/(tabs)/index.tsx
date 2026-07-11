@@ -191,8 +191,8 @@ export default function Home() {
           </View>
         )}
 
-        {/* About - full width edge-to-edge */}
-        <View style={styles.aboutWrap} testID="about-card">
+        {/* About - full width edge-to-edge, natural aspect */}
+        <View testID="about-card">
           <Image source={{ uri: ABOUT_IMAGE }} style={styles.aboutImage} contentFit="contain" />
         </View>
 
@@ -337,7 +337,6 @@ const styles = StyleSheet.create({
     fontWeight: "600",
   },
 
-  // About edge-to-edge
-  aboutWrap: { width: "100%", backgroundColor: COLORS.surfaceSecondary, marginTop: SPACING.lg },
-  aboutImage: { width: "100%", aspectRatio: 1 },
+  // About edge-to-edge - portrait aspect (1080x1920 → 9:16)
+  aboutImage: { width: "100%", aspectRatio: 9 / 16, backgroundColor: COLORS.white },
 });
