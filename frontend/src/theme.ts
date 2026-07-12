@@ -87,3 +87,8 @@ export const ABOUT_IMAGE =
 // Servizi - sfondo parco auto
 export const SERVICES_IMAGE =
   "https://customer-assets.emergentagent.com/job_servizio-civile-app/artifacts/qwk7hatz_La-provvidenza-1920-x-529-px-1080-x-1920-px-1.png";
+
+
+// Sfondo landing sito web
+export const SITE_BG =
+  "https://customer-assets.emergentagent.com/job_ambulance-booking-5/artifacts/x6gqb9wg_Sfondo%20SITO.png";

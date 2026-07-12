@@ -265,7 +265,8 @@ function AdminDashboard({
         api.availability(1, date).catch(() => []),
         api.listBookings(date),
       ]);
-      setAvail(a && a.length ? a[0] : null);
+      const dayAvail = Array.isArray(a) ? a.find((x) => x.date === date) : null;
+      setAvail(dayAvail || null);
       setBookings(b);
     } catch (e) {
       console.warn(e);

@@ -1,12 +1,21 @@
 import { useEffect, useRef } from "react";
-import { View, StyleSheet, Text, Animated, Easing } from "react-native";
+import { StyleSheet, Text, Animated, Easing, Platform } from "react-native";
 import { Image } from "expo-image";
 import { useRouter } from "expo-router";
 import { LinearGradient } from "expo-linear-gradient";
 
 import { COLORS, LOGO_URL, SPACING } from "@/src/theme";
+import Landing from "@/src/components/Landing";
 
-export default function Splash() {
+export default function Index() {
+  // On web the app doubles as the public website (laprovvidenza.it).
+  if (Platform.OS === "web") {
+    return <Landing />;
+  }
+  return <Splash />;
+}
+
+function Splash() {
   const router = useRouter();
   const pulse = useRef(new Animated.Value(0)).current;
 
