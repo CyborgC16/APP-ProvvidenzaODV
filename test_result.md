@@ -264,7 +264,7 @@ test_plan:
 agent_communication:
     - agent: "main"
       message: |
-        Please test the new booking backend. Master login: CyborgC17 / Benito99. (in test_credentials.md).
+        Please test the new booking backend. Master login: use MASTER_USERNAME / MASTER_PASSWORD from backend/.env (also referenced in memory/test_credentials.md).
         Focus:
         - GET /api/availability?days=7 : Sunday must be excluded; ambulanza cap 3, furgone cap 2.
         - POST /api/bookings (public, no auth): phone REQUIRED (empty -> 422); time > 16:00 -> 400; Sunday -> 400; past date -> 400; capacity: 4th ambulanza same day -> 400. email optional.

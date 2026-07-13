@@ -7,8 +7,8 @@ import requests
 BASE_URL = os.environ.get("EXPO_BACKEND_URL", "https://servizio-civile-app.preview.emergentagent.com").rstrip("/")
 API = f"{BASE_URL}/api"
 
-MASTER_USER = "CyborgC17"
-MASTER_PASS = "Benito99."
+MASTER_USER = os.environ.get("MASTER_USERNAME", "")
+MASTER_PASS = os.environ.get("MASTER_PASSWORD", "")
 
 
 @pytest.fixture(scope="session")

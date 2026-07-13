@@ -34,7 +34,7 @@ App mobile (Expo iOS/Android + web responsive) e backend FastAPI per "La Provvid
 - Frontend: Expo Router (SDK 54), React Native, TypeScript, expo-image, expo-image-picker, expo-navigation-bar, expo-linear-gradient.
 - Backend: FastAPI + Motor (MongoDB), bcrypt + PyJWT auth, smtplib per email Gmail SMTP.
 - i18n: dizionario IT/EN custom (no librerie esterne) persistito su storage locale.
-- Master seedato a startup: `CyborgC17 / Benito99.`
+- Master seedato a startup da `MASTER_USERNAME` / `MASTER_PASSWORD` (definiti in `backend/.env`, escluso da git).
 
 ## Email Gmail SMTP
 - Inviata in background a `figlioli.enrico@gmail.com`, CC `info@laprovvidenza.it`, e **anche al prenotante** (email inserita nel form).

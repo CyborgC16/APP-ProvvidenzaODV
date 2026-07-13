@@ -8,12 +8,28 @@ import json
 from datetime import datetime, timedelta
 from typing import Optional
 
-# Backend URL from frontend/.env
-BASE_URL = "https://2de94f63-a1e7-48cb-aaa5-ba70fbfb418c.preview.emergentagent.com/api"
+import os
+from pathlib import Path
 
-# Master credentials from test_credentials.md
-MASTER_USERNAME = "CyborgC17"
-MASTER_PASSWORD = "Benito99."
+# --- Credentials & URL are loaded from environment / backend .env (never hardcoded) ---
+_ENV_PATH = Path(__file__).resolve().parent / "backend" / ".env"
+if _ENV_PATH.exists():
+    for _line in _ENV_PATH.read_text().splitlines():
+        _line = _line.strip()
+        if _line and not _line.startswith("#") and "=" in _line:
+            _k, _v = _line.split("=", 1)
+            os.environ.setdefault(_k.strip(), _v.strip().strip('"').strip("'"))
+
+BASE_URL = os.environ.get(
+    "EXPO_PUBLIC_BACKEND_URL",
+    "https://2de94f63-a1e7-48cb-aaa5-ba70fbfb418c.preview.emergentagent.com",
+).rstrip("/") + "/api"
+
+# Master credentials are read from env (MASTER_USERNAME / MASTER_PASSWORD in backend/.env)
+MASTER_USERNAME = os.environ.get("MASTER_USERNAME", "")
+MASTER_PASSWORD = os.environ.get("MASTER_PASSWORD", "")
+if not MASTER_USERNAME or not MASTER_PASSWORD:
+    raise SystemExit("Set MASTER_USERNAME and MASTER_PASSWORD in backend/.env before running the tests.")
 
 # Test state
 master_token: Optional[str] = None
