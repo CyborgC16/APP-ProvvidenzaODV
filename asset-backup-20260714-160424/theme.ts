@@ -1,34 +1,4 @@
-﻿import { Platform, Image as RNImage } from "react-native";
-
-const localAssetUri = (asset: unknown): string => {
-  if (typeof asset === "string") {
-    return asset;
-  }
-
-  if (asset && typeof asset === "object") {
-    const value = asset as {
-      uri?: string;
-      default?: string;
-    };
-
-    if (typeof value.uri === "string") {
-      return value.uri;
-    }
-
-    if (typeof value.default === "string") {
-      return value.default;
-    }
-  }
-
-  if (
-    Platform.OS !== "web" &&
-    typeof RNImage.resolveAssetSource === "function"
-  ) {
-    return RNImage.resolveAssetSource(asset as number)?.uri ?? "";
-  }
-
-  return "";
-};
+import { Platform } from "react-native";
 
 export const COLORS = {
   surface: "#FDFBF7",
@@ -96,30 +66,29 @@ export const SHADOW = {
 };
 
 export const LOGO_URL =
-  localAssetUri(require("../assets/provvidenza/logo.png"));
+  "https://customer-assets.emergentagent.com/job_6ff22b11-31a6-448a-bcd0-492ab14ab6b8/artifacts/qkyr1ljo_LOGO%20FINALE.png";
 
 // Hero principale (schermata home) - ambulanza notturna La Provvidenza
 export const HERO_IMAGE =
-  localAssetUri(require("../assets/provvidenza/hero.png"));
+  "https://customer-assets.emergentagent.com/job_servizio-civile-app/artifacts/1l3eqhz3_ChatGPT%20Image%2029%20set%202025%2C%2015_48_09.png";
 
 // I Nostri Volontari - operatrice davanti ambulanza
 export const AMBULANCE_IMAGE =
-  localAssetUri(require("../assets/provvidenza/volontari.jpg"));
+  "https://customer-assets.emergentagent.com/job_servizio-civile-app/artifacts/1y3dzyqi_20250908_085113.jpg";
 
 // Servizio Civile - logo SCU
 export const CIVIL_SERVICE_IMAGE =
-  localAssetUri(require("../assets/provvidenza/servizio-civile.png"));
+  "https://customer-assets.emergentagent.com/job_servizio-civile-app/artifacts/zm7kc7p2_servizio_civile_universale_logo.png";
 
 // Chi Siamo - sfondo gruppo associazione
 export const ABOUT_IMAGE =
-  localAssetUri(require("../assets/provvidenza/chi-siamo.png"));
+  "https://customer-assets.emergentagent.com/job_servizio-civile-app/artifacts/9e1336w2_La-provvidenza-1920-x-529-px-1080-x-1920-px.png";
 
 // Servizi - sfondo parco auto
 export const SERVICES_IMAGE =
-  localAssetUri(require("../assets/provvidenza/servizi.png"));
+  "https://customer-assets.emergentagent.com/job_servizio-civile-app/artifacts/qwk7hatz_La-provvidenza-1920-x-529-px-1080-x-1920-px-1.png";
 
 
 // Sfondo landing sito web
 export const SITE_BG =
-  localAssetUri(require("../assets/provvidenza/sfondo-sito.png"));
-
+  "https://customer-assets.emergentagent.com/job_ambulance-booking-5/artifacts/x6gqb9wg_Sfondo%20SITO.png";
