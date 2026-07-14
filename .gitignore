@@ -87,3 +87,33 @@ credentials.json
 *.key
 .credentials
 archive.zip
+
+# Docker
+docker-data/
+mongodb-data/
+logs/
+backups/
+
+# Python
+__pycache__/
+*.pyc
+
+# VSCode
+.vscode/
+
+# Environment
+.env
+backend/.env
+frontend/.env
+
+# Expo
+frontend/.expo
+frontend/.metro-cache
+frontend/dist
+
+# Node
+frontend/node_modules
+
+# Windows
+Thumbs.db
+Desktop.ini
