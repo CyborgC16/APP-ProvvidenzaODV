@@ -1,4 +1,4 @@
-<?php
+﻿<?php
 /**
  * Plugin Name:       La Provvidenza ODV - Gestione Prenotazioni
  * Plugin URI:        https://www.laprovvidenza.it
@@ -21,7 +21,7 @@ define( 'PROVVIDENZA_APP_OPT', 'provvidenza_app_options' );
  */
 function provvidenza_app_defaults() {
 	return array(
-		'app_url' => '',      // URL dell'app pubblicata (es. https://xxxx.preview.emergentagent.com)
+		'app_url' => '',      // URL dell'app pubblicata (es. https://app.laprovvidenza.it)
 		'height'  => 820,      // Altezza iframe in px
 		'mode'    => 'both',   // both | embed | button
 	);
@@ -67,7 +67,7 @@ function provvidenza_app_settings_page() {
 	<div class="wrap">
 		<h1>La Provvidenza ODV &mdash; Gestione Prenotazioni</h1>
 		<p>Configura l'app e poi inserisci lo shortcode <code>[provvidenza_app]</code> in una pagina
-		(es. "Area Riservata"). Da lì potrai <strong>accedere e gestire le prenotazioni dal PC</strong>.</p>
+		(es. "Area Riservata"). Da lÃ¬ potrai <strong>accedere e gestire le prenotazioni dal PC</strong>.</p>
 		<form method="post" action="options.php">
 			<?php settings_fields( 'provvidenza_app_group' ); ?>
 			<table class="form-table" role="presentation">
@@ -75,9 +75,9 @@ function provvidenza_app_settings_page() {
 					<th scope="row"><label for="pv_url">URL dell'app pubblicata</label></th>
 					<td>
 						<input name="<?php echo esc_attr( PROVVIDENZA_APP_OPT ); ?>[app_url]" id="pv_url"
-							type="url" class="regular-text" placeholder="https://... (dato dal pulsante Publish)"
+							type="url" class="regular-text" placeholder="https://app.laprovvidenza.it"
 							value="<?php echo esc_attr( $opts['app_url'] ); ?>" style="width:100%;max-width:640px;" />
-						<p class="description">Incolla qui l'indirizzo dell'app ottenuto dopo la pubblicazione (pulsante <em>Publish</em>).</p>
+						<p class="description">Inserisci lâ€™indirizzo pubblico del gestionale, ad esempio <code>https://app.laprovvidenza.it</code>.</p>
 					</td>
 				</tr>
 				<tr>
@@ -86,7 +86,7 @@ function provvidenza_app_settings_page() {
 						type="number" min="400" step="10" value="<?php echo esc_attr( $opts['height'] ); ?>" /></td>
 				</tr>
 				<tr>
-					<th scope="row"><label for="pv_mode">Modalità di visualizzazione</label></th>
+					<th scope="row"><label for="pv_mode">ModalitÃ  di visualizzazione</label></th>
 					<td>
 						<select name="<?php echo esc_attr( PROVVIDENZA_APP_OPT ); ?>[mode]" id="pv_mode">
 							<option value="both" <?php selected( $opts['mode'], 'both' ); ?>>Pulsante + App incorporata (consigliato)</option>
@@ -180,3 +180,4 @@ add_shortcode( 'provvidenza_app', function ( $atts ) {
 	<?php
 	return ob_get_clean();
 } );
+

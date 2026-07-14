@@ -117,3 +117,9 @@ frontend/node_modules
 # Windows
 Thumbs.db
 Desktop.ini
+infrastructure/.env
+frontend/.expo/
+frontend/.metro-cache/
+frontend/dist/
+frontend/node_modules/
+cleanup-backup-*/

@@ -1,10 +1,10 @@
-"""Backend tests for La Provvidenza ODV API."""
+﻿"""Backend tests for La Provvidenza ODV API."""
 import os
 import uuid
 import pytest
 import requests
 
-BASE_URL = os.environ.get("EXPO_BACKEND_URL", "https://servizio-civile-app.preview.emergentagent.com").rstrip("/")
+BASE_URL = os.environ.get("EXPO_BACKEND_URL", "http://localhost:8000").rstrip("/")
 API = f"{BASE_URL}/api"
 
 MASTER_USER = os.environ.get("MASTER_USERNAME", "")
@@ -201,3 +201,4 @@ def test_booking_create_no_auth_and_decrements(master_headers, created_slot):
 def test_bookings_list_requires_auth():
     r = requests.get(f"{API}/bookings")
     assert r.status_code == 401
+
