@@ -1,4 +1,4 @@
-"""La Provvidenza ODV - Backend API"""
+﻿"""La Provvidenza ODV - Backend API"""
 from fastapi import FastAPI, APIRouter, HTTPException, Depends, status, BackgroundTasks
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from dotenv import load_dotenv
@@ -20,6 +20,7 @@ from typing import List, Optional, Literal
 import bcrypt
 import jwt
 from pydantic import BaseModel, Field, EmailStr, field_validator
+from v2_routes import create_v2_router, ensure_v2_indexes
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / ".env")
@@ -353,7 +354,7 @@ class BookingCreateRequest(BaseModel):
     @classmethod
     def _phone_required(cls, v):
         if not v or not v.strip():
-            raise ValueError("Il numero di telefono è obbligatorio")
+            raise ValueError("Il numero di telefono Ã¨ obbligatorio")
         return v.strip()
 
     @field_validator("email", mode="before")
@@ -435,7 +436,7 @@ class NotificationPublic(BaseModel):
 # ===== Email =====
 DISCLAIMER = (
     "Ci riserviamo, per ogni prenotazione ricevuta, di verificare l'effettiva "
-    "disponibilità del mezzo ed eventualmente di richiamarLa per confermare o meno "
+    "disponibilitÃ  del mezzo ed eventualmente di richiamarLa per confermare o meno "
     "il servizio."
 )
 
@@ -476,7 +477,7 @@ def send_booking_email(b: dict) -> bool:
         recipients.append(requester_email)
 
     vehicle_label = "Ambulanza" if b["vehicle_type"] == "ambulanza" else "Furgone Disabili"
-    elevator = "Sì" if b.get("has_elevator") else "No"
+    elevator = "SÃ¬" if b.get("has_elevator") else "No"
     text = f"""Nuova prenotazione - La Provvidenza ODV
 
 Data/Ora: {b['slot_date']} {b['slot_time']}
@@ -537,9 +538,9 @@ def send_cancellation_email(b: dict, reason: Optional[str]) -> bool:
     text = f"""Prenotazione ANNULLATA - La Provvidenza ODV
 
 Gentile {b.get('requester_name','')},
-la informiamo che la sua prenotazione del {b['slot_date']} alle {b['slot_time']} ({vehicle_label}) è stata ANNULLATA.{reason_line}
+la informiamo che la sua prenotazione del {b['slot_date']} alle {b['slot_time']} ({vehicle_label}) Ã¨ stata ANNULLATA.{reason_line}
 
-Per qualsiasi chiarimento può contattarci allo 0923 1234567 o rispondere a questa email.
+Per qualsiasi chiarimento puÃ² contattarci allo 0923 1234567 o rispondere a questa email.
 ID prenotazione: {b['id']}
 
 La Provvidenza ODV - Marsala
@@ -551,11 +552,11 @@ La Provvidenza ODV - Marsala
   </div>
   <div style="padding:16px;">
     <p>Gentile <b>{b.get('requester_name','')}</b>,</p>
-    <p>la informiamo che la sua prenotazione è stata <b style="color:#DC3545;">ANNULLATA</b>.</p>
+    <p>la informiamo che la sua prenotazione Ã¨ stata <b style="color:#DC3545;">ANNULLATA</b>.</p>
     <p><b>Data/Ora:</b> {b['slot_date']} {b['slot_time']}<br/>
        <b>Mezzo:</b> {vehicle_label}</p>
     {f'<p><b>Motivo:</b> {reason}</p>' if reason else ''}
-    <p style="font-size:13px;color:#5B6776;">Per qualsiasi chiarimento può contattarci telefonicamente o rispondere a questa email.</p>
+    <p style="font-size:13px;color:#5B6776;">Per qualsiasi chiarimento puÃ² contattarci telefonicamente o rispondere a questa email.</p>
     <p style="color:#888;font-size:12px;">ID prenotazione: {b['id']}</p>
   </div>
 </body></html>"""
@@ -604,19 +605,19 @@ def validate_booking_day_time(date_str: str, time_str: str):
     except Exception:
         raise HTTPException(status_code=400, detail="Data non valida")
     if day.weekday() not in OPEN_WEEKDAYS:
-        raise HTTPException(status_code=400, detail="Le prenotazioni sono disponibili solo da lunedì a sabato")
+        raise HTTPException(status_code=400, detail="Le prenotazioni sono disponibili solo da lunedÃ¬ a sabato")
     today = datetime.now().date()
     first_bookable = today + timedelta(days=1)
     last_bookable = add_calendar_months(today, 2)
     if day.date() < first_bookable:
         raise HTTPException(
             status_code=400,
-            detail="È possibile prenotare a partire dal giorno successivo a oggi",
+            detail="Ãˆ possibile prenotare a partire dal giorno successivo a oggi",
         )
     if day.date() > last_bookable:
         raise HTTPException(
             status_code=400,
-            detail=f"È possibile prenotare al massimo fino al {last_bookable.strftime('%d/%m/%Y')}",
+            detail=f"Ãˆ possibile prenotare al massimo fino al {last_bookable.strftime('%d/%m/%Y')}",
         )
     if time_str > BOOKING_CUTOFF_TIME:
         raise HTTPException(status_code=400, detail=f"Le prenotazioni sono accettate fino alle {BOOKING_CUTOFF_TIME}")
@@ -660,6 +661,7 @@ async def seed_master():
 @app.on_event("startup")
 async def on_startup():
     await seed_master()
+    await ensure_v2_indexes(db)
 
 
 @app.on_event("shutdown")
@@ -717,10 +719,10 @@ async def list_users(user: dict = Depends(require_role("master", "admin"))):
 async def create_user(body: UserCreateRequest, user: dict = Depends(require_role("master", "admin"))):
     # Only master can create master accounts
     if body.role == "master" and user["role"] != "master":
-        raise HTTPException(status_code=403, detail="Solo il master può creare altri master")
+        raise HTTPException(status_code=403, detail="Solo il master puÃ² creare altri master")
     # admin can create admin (volontari) and servizio_civile - allowed
     if await db.users.find_one({"username": body.username}):
-        raise HTTPException(status_code=400, detail="Username già esistente")
+        raise HTTPException(status_code=400, detail="Username giÃ  esistente")
     generated = None
     pw = body.password
     if not pw:
@@ -759,7 +761,7 @@ async def update_user(user_id: str, body: UserUpdateRequest, user: dict = Depend
     if not target:
         raise HTTPException(status_code=404, detail="Utente non trovato")
     if target["role"] == "master" and user["role"] != "master":
-        raise HTTPException(status_code=403, detail="Solo il master può modificare un master")
+        raise HTTPException(status_code=403, detail="Solo il master puÃ² modificare un master")
     update: dict = {}
     if body.full_name is not None and body.full_name.strip():
         update["full_name"] = body.full_name.strip()
@@ -792,7 +794,7 @@ async def change_password(body: ChangePasswordRequest, user: dict = Depends(get_
 async def delete_own_account(user: dict = Depends(get_current_user)):
     """Any authenticated user can delete their own account (GDPR/Play Store requirement)."""
     if user["role"] == "master":
-        # Prevent orphaning the app – must have another master alive
+        # Prevent orphaning the app â€“ must have another master alive
         others = await db.users.count_documents({"role": "master", "id": {"$ne": user["id"]}})
         if others == 0:
             raise HTTPException(status_code=400, detail="Impossibile eliminare l'unico account master")
@@ -808,7 +810,7 @@ async def delete_user(user_id: str, user: dict = Depends(require_role("master", 
     if not target:
         raise HTTPException(status_code=404, detail="Utente non trovato")
     if target["role"] == "master" and user["role"] != "master":
-        raise HTTPException(status_code=403, detail="Solo il master può eliminare un master")
+        raise HTTPException(status_code=403, detail="Solo il master puÃ² eliminare un master")
     await db.users.delete_one({"id": user_id})
     return {"ok": True}
 
@@ -933,7 +935,7 @@ async def create_booking(body: BookingCreateRequest, background: BackgroundTasks
     booked = await count_active_bookings(body.date, body.vehicle_type)
     capacity = DAILY_CAPACITY[body.vehicle_type]
     if booked >= capacity:
-        raise HTTPException(status_code=400, detail="Nessuna disponibilità per questo giorno e mezzo. Scelga un'altra data.")
+        raise HTTPException(status_code=400, detail="Nessuna disponibilitÃ  per questo giorno e mezzo. Scelga un'altra data.")
 
     booking_doc = {
         "id": str(uuid.uuid4()),
@@ -964,7 +966,7 @@ async def create_booking(body: BookingCreateRequest, background: BackgroundTasks
     background.add_task(send_booking_email, booking_clean)
     await notify_staff(
         "Nuova prenotazione",
-        f"{body.requester_name} {body.requester_surname} · {vehicle_label} · {body.date} {body.time} · Tel: {body.phone}",
+        f"{body.requester_name} {body.requester_surname} Â· {vehicle_label} Â· {body.date} {body.time} Â· Tel: {body.phone}",
         "info",
     )
     return Booking(**booking_clean)
@@ -977,7 +979,7 @@ async def create_manual_booking(body: ManualBookingRequest, user: dict = Depends
     booked = await count_active_bookings(body.date, body.vehicle_type)
     capacity = DAILY_CAPACITY[body.vehicle_type]
     if booked >= capacity:
-        raise HTTPException(status_code=400, detail="Nessuna disponibilità per questo giorno e mezzo.")
+        raise HTTPException(status_code=400, detail="Nessuna disponibilitÃ  per questo giorno e mezzo.")
 
     booking_doc = {
         "id": str(uuid.uuid4()),
@@ -1033,7 +1035,7 @@ async def cancel_booking(
     if not booking:
         raise HTTPException(status_code=404, detail="Prenotazione non trovata")
     if booking.get("status") == "annullata":
-        raise HTTPException(status_code=400, detail="Prenotazione già annullata")
+        raise HTTPException(status_code=400, detail="Prenotazione giÃ  annullata")
     await db.bookings.update_one(
         {"id": booking_id},
         {"$set": {
@@ -1049,7 +1051,7 @@ async def cancel_booking(
     # in-app notification for staff
     await notify_staff(
         "Prenotazione annullata",
-        f"{booking.get('requester_name','')} · {booking['slot_date']} {booking['slot_time']} annullata da {user['full_name']}",
+        f"{booking.get('requester_name','')} Â· {booking['slot_date']} {booking['slot_time']} annullata da {user['full_name']}",
         "warning",
     )
     return {"ok": True, "status": "annullata", "email_sent": bool(booking.get("email"))}
@@ -1437,6 +1439,14 @@ async def delete_vehicle(vehicle_id: str, user: dict = Depends(require_role("mas
     return {"ok": True}
 
 
+
+v2_router = create_v2_router(
+    db=db,
+    require_role=require_role,
+    get_current_user=get_current_user,
+    notify_staff=notify_staff,
+)
+app.include_router(v2_router)
 # include router and middleware
 app.include_router(api_router)
 app.add_middleware(
@@ -1446,3 +1456,4 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
