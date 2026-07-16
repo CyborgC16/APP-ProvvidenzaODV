@@ -1,4 +1,4 @@
-import { useCallback, useState } from "react";
+﻿import { useCallback, useState } from "react";
 import {
   ScrollView,
   View,
@@ -195,7 +195,7 @@ function LoginView({ onLogin }: { onLogin: (u: string, p: string) => Promise<any
             onChangeText={setPassword}
             secureTextEntry
             style={styles.input}
-            placeholder="••••••••"
+            placeholder="â€¢â€¢â€¢â€¢â€¢â€¢â€¢â€¢"
             placeholderTextColor={COLORS.onSurfaceMuted}
           />
           <Pressable
@@ -208,7 +208,7 @@ function LoginView({ onLogin }: { onLogin: (u: string, p: string) => Promise<any
           </Pressable>
 
           <Text style={styles.loginNote}>
-            Le credenziali sono fornite dagli amministratori. La registrazione autonoma non è
+            Le credenziali sono fornite dagli amministratori. La registrazione autonoma non Ã¨
             consentita.
           </Text>
 
@@ -216,7 +216,7 @@ function LoginView({ onLogin }: { onLogin: (u: string, p: string) => Promise<any
             <Pressable onPress={() => router.push("/legal/privacy")} testID="login-privacy">
               <Text style={styles.legalLink}>Privacy</Text>
             </Pressable>
-            <Text style={styles.legalSep}>·</Text>
+            <Text style={styles.legalSep}>Â·</Text>
             <Pressable onPress={() => router.push("/legal/terms")} testID="login-terms">
               <Text style={styles.legalLink}>Termini</Text>
             </Pressable>
@@ -301,7 +301,7 @@ function AdminDashboard({
     if (typeof Alert.prompt === "function") {
       Alert.prompt(
         "Annulla prenotazione",
-        "Motivo (facoltativo). Verrà inviata email di annullamento se disponibile.",
+        "Motivo (facoltativo). VerrÃ  inviata email di annullamento se disponibile.",
         [
           { text: "Indietro", style: "cancel" },
           { text: "Annulla prenotazione", style: "destructive", onPress: (reason?: string) => doCancel(reason) },
@@ -311,7 +311,7 @@ function AdminDashboard({
     } else {
       Alert.alert(
         "Annulla prenotazione",
-        "Confermi l'annullamento? Verrà inviata email di annullamento al prenotante (se disponibile).",
+        "Confermi l'annullamento? VerrÃ  inviata email di annullamento al prenotante (se disponibile).",
         [
           { text: "Indietro", style: "cancel" },
           { text: "Annulla prenotazione", style: "destructive", onPress: () => doCancel() },
@@ -323,30 +323,35 @@ function AdminDashboard({
   return (
     <SafeAreaView style={styles.safe} edges={["top"]} testID="admin-dashboard">
       <View style={styles.dashHeader}>
-        {photoB64 ? (
-          <Image source={{ uri: photoB64 }} style={styles.avatar} contentFit="cover" />
-        ) : (
-          <View style={[styles.avatar, { backgroundColor: COLORS.brandLight, alignItems: "center", justifyContent: "center" }]}>
-            <Text style={{ color: COLORS.brand, fontWeight: "800", fontSize: 16 }}>{fullName.charAt(0)}</Text>
+        <View style={styles.profileRow}>
+          {photoB64 ? (
+            <Image source={{ uri: photoB64 }} style={styles.avatar} contentFit="cover" />
+          ) : (
+            <View style={[styles.avatar, { backgroundColor: COLORS.brandLight, alignItems: "center", justifyContent: "center" }]}>
+              <Text style={{ color: COLORS.brand, fontWeight: "800", fontSize: 16 }}>{fullName.charAt(0)}</Text>
+            </View>
+          )}
+          <View style={styles.profileText}>
+            <Text style={styles.dashTitle} numberOfLines={2}>Ciao, {fullName}</Text>
+            <Text style={styles.dashSubtitle}>
+              Ruolo: <Text style={{ fontWeight: "700", color: COLORS.brand }}>{role === "admin" ? "VOLONTARIO" : role.toUpperCase()}</Text>
+            </Text>
           </View>
-        )}
-        <View style={{ flex: 1 }}>
-          <Text style={styles.dashTitle}>Ciao, {fullName}</Text>
-          <Text style={styles.dashSubtitle}>
-            Ruolo: <Text style={{ fontWeight: "700", color: COLORS.brand }}>{role === "admin" ? "VOLONTARIO" : role.toUpperCase()}</Text>
-          </Text>
         </View>
-        <LangToggle />
-        <NotificationsBell />
-        <Pressable onPress={onOpenProfile} hitSlop={10} testID="open-admin-profile" style={styles.iconBtn}>
-          <Ionicons name="create-outline" size={22} color={COLORS.navy} />
-        </Pressable>
-        <Pressable onPress={onOpenSettings} hitSlop={10} testID="open-settings-btn" style={styles.iconBtn}>
-          <Ionicons name="settings-outline" size={22} color={COLORS.navy} />
-        </Pressable>
-        <Pressable onPress={onLogout} hitSlop={10} testID="logout-btn" style={styles.iconBtn}>
-          <Ionicons name="log-out-outline" size={22} color={COLORS.navy} />
-        </Pressable>
+
+        <View style={styles.headerActions}>
+          <LangToggle />
+          <NotificationsBell />
+          <Pressable onPress={onOpenProfile} hitSlop={10} testID="open-admin-profile" style={styles.iconBtn}>
+            <Ionicons name="create-outline" size={22} color={COLORS.navy} />
+          </Pressable>
+          <Pressable onPress={onOpenSettings} hitSlop={10} testID="open-settings-btn" style={styles.iconBtn}>
+            <Ionicons name="settings-outline" size={22} color={COLORS.navy} />
+          </Pressable>
+          <Pressable onPress={onLogout} hitSlop={10} testID="logout-btn" style={styles.iconBtn}>
+            <Ionicons name="log-out-outline" size={22} color={COLORS.navy} />
+          </Pressable>
+        </View>
       </View>
 
       <ScrollView
@@ -392,7 +397,7 @@ function AdminDashboard({
         refreshControl={<RefreshControl refreshing={loading} onRefresh={load} tintColor={COLORS.brand} />}
       >
         <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle}>Disponibilità del giorno</Text>
+          <Text style={styles.sectionTitle}>DisponibilitÃ  del giorno</Text>
         </View>
         {avail ? (
           <View style={styles.availRow}>
@@ -428,14 +433,14 @@ function AdminDashboard({
               <View key={b.id} style={[styles.bookingCard, cancelled && { opacity: 0.6 }]} testID={`admin-booking-${b.id}`}>
                 <View style={styles.bookingHeader}>
                   <Text style={styles.bookingTime}>
-                    {b.slot_time} · {b.vehicle_type === "ambulanza" ? "Ambulanza" : "Furgone"}
+                    {b.slot_time} Â· {b.vehicle_type === "ambulanza" ? "Ambulanza" : "Furgone"}
                   </Text>
                   <View style={[styles.statusBadge, { backgroundColor: badgeColor }]}>
                     <Text style={[styles.statusBadgeText, { color: COLORS.white }]}>{b.status}</Text>
                   </View>
                 </View>
                 {b.source === "manual" ? (
-                  <Text style={styles.sourceTag}>📞 Registrata da volontario</Text>
+                  <Text style={styles.sourceTag}>ðŸ“ž Registrata da volontario</Text>
                 ) : null}
                 <Text style={styles.bookingName}>
                   {b.requester_name}
@@ -446,12 +451,12 @@ function AdminDashboard({
                 ) : null}
                 {b.address ? <Text style={styles.bookingMeta}>{b.address}</Text> : null}
                 <Text style={styles.bookingMeta}>
-                  Tel: {b.phone || "-"}{b.email ? ` · Email: ${b.email}` : ""}
+                  Tel: {b.phone || "-"}{b.email ? ` Â· Email: ${b.email}` : ""}
                 </Text>
                 {b.floor !== null && b.floor !== undefined ? (
                   <Text style={styles.bookingMeta}>
-                    Piano {b.floor} · Ascensore: {b.has_elevator ? "Sì" : "No"}
-                    {b.patient_weight_class ? ` · ${b.patient_weight_class}` : ""}
+                    Piano {b.floor} Â· Ascensore: {b.has_elevator ? "SÃ¬" : "No"}
+                    {b.patient_weight_class ? ` Â· ${b.patient_weight_class}` : ""}
                   </Text>
                 ) : null}
                 {b.notes ? <Text style={styles.bookingMeta}>Note: {b.notes}</Text> : null}
@@ -524,27 +529,32 @@ function CivilServiceDashboard({ onLogout, fullName, onOpenSettings }: { onLogou
   return (
     <SafeAreaView style={styles.safe} edges={["top"]} testID="civil-service-dashboard">
       <View style={styles.dashHeader}>
-        {user?.photo_b64 ? (
-          <Image source={{ uri: user.photo_b64 }} style={styles.avatar} contentFit="cover" />
-        ) : (
-          <View style={[styles.avatar, { backgroundColor: COLORS.brandLight, alignItems: "center", justifyContent: "center" }]}>
-            <Text style={{ color: COLORS.brand, fontWeight: "800", fontSize: 16 }}>{fullName.charAt(0)}</Text>
+        <View style={styles.profileRow}>
+          {user?.photo_b64 ? (
+            <Image source={{ uri: user.photo_b64 }} style={styles.avatar} contentFit="cover" />
+          ) : (
+            <View style={[styles.avatar, { backgroundColor: COLORS.brandLight, alignItems: "center", justifyContent: "center" }]}>
+              <Text style={{ color: COLORS.brand, fontWeight: "800", fontSize: 16 }}>{fullName.charAt(0)}</Text>
+            </View>
+          )}
+          <View style={styles.profileText}>
+            <Text style={styles.dashTitle} numberOfLines={2}>Ciao, {fullName}</Text>
+            <Text style={styles.dashSubtitle}>Servizio Civile</Text>
           </View>
-        )}
-        <View style={{ flex: 1 }}>
-          <Text style={styles.dashTitle}>Ciao, {fullName}</Text>
-          <Text style={styles.dashSubtitle}>Servizio Civile</Text>
         </View>
-        <LangToggle />
-        <Pressable onPress={() => setShowProfile(true)} hitSlop={10} testID="open-profile-btn" style={styles.iconBtn}>
-          <Ionicons name="create-outline" size={22} color={COLORS.navy} />
-        </Pressable>
-        <Pressable onPress={onOpenSettings} hitSlop={10} testID="open-settings-btn-sc" style={styles.iconBtn}>
-          <Ionicons name="settings-outline" size={22} color={COLORS.navy} />
-        </Pressable>
-        <Pressable onPress={onLogout} hitSlop={10} testID="logout-btn" style={styles.iconBtn}>
-          <Ionicons name="log-out-outline" size={22} color={COLORS.navy} />
-        </Pressable>
+
+        <View style={styles.headerActions}>
+          <LangToggle />
+          <Pressable onPress={() => setShowProfile(true)} hitSlop={10} testID="open-profile-btn" style={styles.iconBtn}>
+            <Ionicons name="create-outline" size={22} color={COLORS.navy} />
+          </Pressable>
+          <Pressable onPress={onOpenSettings} hitSlop={10} testID="open-settings-btn-sc" style={styles.iconBtn}>
+            <Ionicons name="settings-outline" size={22} color={COLORS.navy} />
+          </Pressable>
+          <Pressable onPress={onLogout} hitSlop={10} testID="logout-btn" style={styles.iconBtn}>
+            <Ionicons name="log-out-outline" size={22} color={COLORS.navy} />
+          </Pressable>
+        </View>
       </View>
 
       <ProfileEditor visible={showProfile} onClose={() => setShowProfile(false)} onSaved={refresh} />
@@ -569,7 +579,7 @@ function CivilServiceDashboard({ onLogout, fullName, onOpenSettings }: { onLogou
                   </View>
                   <View style={{ flex: 1 }}>
                     <Text style={styles.itemTitle}>
-                      {s.time} · {s.vehicle_type === "ambulanza" ? "Ambulanza" : "Furgone"}
+                      {s.time} Â· {s.vehicle_type === "ambulanza" ? "Ambulanza" : "Furgone"}
                     </Text>
                     {s.notes ? <Text style={styles.itemSub}>{s.notes}</Text> : null}
                   </View>
@@ -672,7 +682,7 @@ function ProfileEditor({ visible, onClose, onSaved }: { visible: boolean; onClos
           </View>
           <Text style={styles.fieldLabel}>Nome completo</Text>
           <TextInput value={fullName} onChangeText={setFullName} style={styles.input} testID="profile-fullname" />
-          <Text style={styles.fieldLabel}>Età</Text>
+          <Text style={styles.fieldLabel}>EtÃ </Text>
           <TextInput value={age} onChangeText={setAge} keyboardType="numeric" style={styles.input} testID="profile-age" />
           <Text style={styles.fieldLabel}>Bio breve</Text>
           <TextInput value={bio} onChangeText={setBio} multiline style={[styles.input, { height: 90, textAlignVertical: "top" }]} testID="profile-bio" />
@@ -683,7 +693,7 @@ function ProfileEditor({ visible, onClose, onSaved }: { visible: boolean; onClos
             testID="toggle-notify-email"
           >
             <View style={{ flex: 1 }}>
-              <Text style={styles.toggleTitle}>🔔 Notifiche email avvisi</Text>
+              <Text style={styles.toggleTitle}>ðŸ”” Notifiche email avvisi</Text>
               <Text style={styles.toggleHint}>
                 Ricevi via email gli avvisi pubblicati da master/volontari
               </Text>
@@ -694,7 +704,7 @@ function ProfileEditor({ visible, onClose, onSaved }: { visible: boolean; onClos
           </Pressable>
 
           <Text style={styles.hint}>
-            💡 Per aggiungere ruolo, data di ingresso e data di nascita, tocca la tua foto nella pagina
+            ðŸ’¡ Per aggiungere ruolo, data di ingresso e data di nascita, tocca la tua foto nella pagina
             &quot;Volontari&quot; o &quot;Servizio Civile&quot; e premi Modifica.
           </Text>
 
@@ -755,17 +765,47 @@ const styles = StyleSheet.create({
   },
   errorText: { color: COLORS.white, flex: 1, fontSize: 13 },
   dashHeader: {
-    flexDirection: "row",
-    alignItems: "center",
     padding: SPACING.lg,
-    gap: SPACING.sm,
+    rowGap: SPACING.md,
     backgroundColor: COLORS.surfaceSecondary,
     borderBottomWidth: 1,
     borderBottomColor: COLORS.border,
   },
-  dashTitle: { fontSize: 17, fontWeight: "700", color: COLORS.navy },
-  dashSubtitle: { fontSize: 12, color: COLORS.onSurfaceMuted, marginTop: 2 },
-  iconBtn: { padding: 8, borderRadius: RADIUS.sm, backgroundColor: COLORS.surfaceTertiary },
+  profileRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    width: "100%",
+    columnGap: SPACING.md,
+  },
+  profileText: {
+    flex: 1,
+    minWidth: 0,
+  },
+  headerActions: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "flex-end",
+    flexWrap: "wrap",
+    width: "100%",
+    columnGap: SPACING.sm,
+    rowGap: SPACING.sm,
+  },
+  dashTitle: {
+    fontSize: 17,
+    lineHeight: 22,
+    fontWeight: "700",
+    color: COLORS.navy,
+  },
+  dashSubtitle: {
+    fontSize: 12,
+    color: COLORS.onSurfaceMuted,
+    marginTop: 2,
+  },
+  iconBtn: {
+    padding: 8,
+    borderRadius: RADIUS.sm,
+    backgroundColor: COLORS.surfaceTertiary,
+  },
   avatar: { width: 44, height: 44, borderRadius: 22 },
   profileModal: { flex: 1, backgroundColor: "rgba(0,0,0,0.5)", justifyContent: "flex-end" },
   profileCard: { backgroundColor: COLORS.surface, borderTopLeftRadius: RADIUS.lg, borderTopRightRadius: RADIUS.lg, padding: SPACING.lg, maxHeight: "92%" },
@@ -898,3 +938,4 @@ const styles = StyleSheet.create({
     textTransform: "capitalize",
   },
 });
+

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+﻿import { useEffect, useMemo, useState } from "react";
 import {
   ScrollView,
   View,
@@ -22,6 +22,39 @@ type Weight = "normopeso" | "obeso";
 const TIME_OPTIONS = ["08:00", "08:30", "09:00", "09:30", "10:00", "10:30", "11:00", "11:30", "12:00", "12:30", "13:00", "13:30", "14:00", "14:30", "15:00", "15:30", "16:00"];
 const WEEKDAY_LABELS = ["Lun", "Mar", "Mer", "Gio", "Ven", "Sab", "Dom"];
 
+
+function toLocalIsoDate(date: Date): string {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+function getTomorrowIso(): string {
+  const date = new Date();
+  date.setHours(12, 0, 0, 0);
+  date.setDate(date.getDate() + 1);
+  return toLocalIsoDate(date);
+}
+
+function getMaxBookingIso(): string {
+  const today = new Date();
+  today.setHours(12, 0, 0, 0);
+
+  const originalDay = today.getDate();
+  const maxDate = new Date(today);
+  maxDate.setDate(1);
+  maxDate.setMonth(maxDate.getMonth() + 2);
+
+  const lastDayOfTargetMonth = new Date(
+    maxDate.getFullYear(),
+    maxDate.getMonth() + 1,
+    0,
+  ).getDate();
+
+  maxDate.setDate(Math.min(originalDay, lastDayOfTargetMonth));
+  return toLocalIsoDate(maxDate);
+}
 export default function Prenota() {
   const [step, setStep] = useState<1 | 2 | 3>(1);
   const [vehicle, setVehicle] = useState<Vehicle | null>(null);
@@ -52,8 +85,11 @@ export default function Prenota() {
     setLoadingAvail(true);
     setError(null);
     api
-      .availability(18)
-      .then((data) => setAvailability(data))
+      .availability(70, getTomorrowIso())
+      .then((data) => {
+        const maxBookingDate = getMaxBookingIso();
+        setAvailability(data.filter((day) => day.date <= maxBookingDate));
+      })
       .catch((e) => setError(e.message))
       .finally(() => setLoadingAvail(false));
   }, [step, vehicle]);
@@ -143,13 +179,13 @@ export default function Prenota() {
           </View>
           <Text style={styles.successTitle}>Prenotazione Inviata!</Text>
           <Text style={styles.successBody}>
-            Grazie per averci scelto. La sua richiesta è stata inviata ai nostri volontari.{"\n\n"}
+            Grazie per averci scelto. La sua richiesta Ã¨ stata inviata ai nostri volontari.{"\n\n"}
             <Text style={{ fontWeight: "700" }}>ID Prenotazione:</Text> {bookingId}
           </Text>
           <View style={styles.disclaimerBox}>
             <Ionicons name="information-circle" size={18} color={COLORS.brand} />
             <Text style={styles.disclaimerText}>
-              Ci riserviamo, per ogni prenotazione ricevuta, di verificare l&apos;effettiva disponibilità
+              Ci riserviamo, per ogni prenotazione ricevuta, di verificare l&apos;effettiva disponibilitÃ 
               del mezzo ed eventualmente di richiamarLa per confermare o meno il servizio.
             </Text>
           </View>
@@ -226,7 +262,7 @@ export default function Prenota() {
             <View testID="step-slot">
               <Text style={styles.sectionTitle}>Scegli il Giorno</Text>
               <Text style={styles.sectionSubtitle}>
-                Disponibili dal lunedì al sabato, prenotazioni fino alle 16:00. Il numero indica i posti
+                Disponibili dal lunedÃ¬ al sabato, prenotazioni fino alle 16:00. Il numero indica i posti
                 ancora liberi per il mezzo scelto.
               </Text>
               {loadingAvail ? (
@@ -234,8 +270,8 @@ export default function Prenota() {
               ) : availableForVehicle.length === 0 ? (
                 <View style={styles.emptyBox}>
                   <Ionicons name="calendar-outline" size={36} color={COLORS.onSurfaceMuted} />
-                  <Text style={styles.emptyText}>Nessuna disponibilità nei prossimi giorni.</Text>
-                  <Text style={styles.emptySubtext}>Riprova più tardi o contattaci telefonicamente.</Text>
+                  <Text style={styles.emptyText}>Nessuna disponibilitÃ  nei prossimi giorni.</Text>
+                  <Text style={styles.emptySubtext}>Riprova piÃ¹ tardi o contattaci telefonicamente.</Text>
                 </View>
               ) : (
                 <>
@@ -273,7 +309,7 @@ export default function Prenota() {
                     <View style={{ marginTop: SPACING.lg }}>
                       <Text style={styles.sectionTitle}>Scegli l&apos;Orario</Text>
                       <Text style={styles.sectionSubtitle}>
-                        {formatDate(selectedDate)} · {remainingForSelected} posti disponibili
+                        {formatDate(selectedDate)} Â· {remainingForSelected} posti disponibili
                       </Text>
                       <View style={styles.slotsGrid}>
                         {TIME_OPTIONS.map((tm) => {
@@ -323,7 +359,7 @@ export default function Prenota() {
               <View style={styles.inlineNote}>
                 <Ionicons name="call" size={14} color={COLORS.brand} />
                 <Text style={styles.inlineNoteText}>
-                  Il telefono è obbligatorio: potremmo richiamarLa per confermare la disponibilità.
+                  Il telefono Ã¨ obbligatorio: potremmo richiamarLa per confermare la disponibilitÃ .
                 </Text>
               </View>
 
@@ -342,7 +378,7 @@ export default function Prenota() {
 
               <Text style={styles.miniLabel}>Ascensore in casa</Text>
               <View style={styles.toggleRow}>
-                <ToggleChip label="Sì" active={hasElevator === true} onPress={() => setHasElevator(true)} testID="elevator-yes" />
+                <ToggleChip label="SÃ¬" active={hasElevator === true} onPress={() => setHasElevator(true)} testID="elevator-yes" />
                 <ToggleChip label="No" active={hasElevator === false} onPress={() => setHasElevator(false)} testID="elevator-no" />
               </View>
 
@@ -352,7 +388,7 @@ export default function Prenota() {
               <View style={styles.disclaimerBox}>
                 <Ionicons name="information-circle" size={18} color={COLORS.brand} />
                 <Text style={styles.disclaimerText}>
-                  Ci riserviamo, per ogni prenotazione ricevuta, di verificare l&apos;effettiva disponibilità
+                  Ci riserviamo, per ogni prenotazione ricevuta, di verificare l&apos;effettiva disponibilitÃ 
                   del mezzo ed eventualmente di richiamarLa per confermare o meno il servizio.
                 </Text>
               </View>
@@ -608,3 +644,4 @@ const styles = StyleSheet.create({
   successTitle: { fontSize: 22, fontWeight: "700", color: COLORS.navy, textAlign: "center" },
   successBody: { fontSize: 14, color: COLORS.onSurface, textAlign: "center", lineHeight: 22 },
 });
+
