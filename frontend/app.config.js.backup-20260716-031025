@@ -4,7 +4,7 @@ module.exports = {
   expo: {
     name: "La Provvidenza ODV",
     slug: "la-provvidenza-odv",
-    version: "1.2.2",
+    version: "1.2.1",
     orientation: "portrait",
     icon: "./assets/images/icon.png",
     scheme: "laprovvidenza",
@@ -14,22 +14,25 @@ module.exports = {
       supportsTablet: true,
       bundleIdentifier: "it.laprovvidenza.app",
       infoPlist: {
-        NSLocationWhenInUseUsageDescription: "Condividi la posizione con la crew durante i servizi",
-        NSLocationAlwaysAndWhenInUseUsageDescription: "Condividi la posizione anche in background con la crew",
-        NSMicrophoneUsageDescription: "Trasmetti messaggi audio sul walkie-talkie",
+        NSLocationWhenInUseUsageDescription:
+          "Condividi la posizione con la crew durante i servizi",
+        NSLocationAlwaysAndWhenInUseUsageDescription:
+          "Condividi la posizione anche in background con la crew",
+        NSMicrophoneUsageDescription:
+          "Trasmetti messaggi audio sul walkie-talkie",
         UIBackgroundModes: ["location", "audio"],
       },
     },
     android: {
       package: "it.laprovvidenza.app",
-      versionCode: 2,
       adaptiveIcon: {
         foregroundImage: "./assets/images/adaptive-icon.png",
         backgroundColor: "#FDFBF7",
       },
       edgeToEdgeEnabled: true,
-      softwareKeyboardLayoutMode: "resize",
-      config: googleMapsApiKey ? { googleMaps: { apiKey: googleMapsApiKey } } : {},
+      config: googleMapsApiKey
+        ? { googleMaps: { apiKey: googleMapsApiKey } }
+        : {},
       permissions: [
         "android.permission.ACCESS_FINE_LOCATION",
         "android.permission.ACCESS_COARSE_LOCATION",
@@ -53,7 +56,7 @@ module.exports = {
         "expo-splash-screen",
         {
           image: "./assets/images/splash-image.png",
-          imageWidth: 240,
+          imageWidth: 200,
           resizeMode: "contain",
           backgroundColor: "#FDFBF7",
         },
@@ -64,7 +67,8 @@ module.exports = {
     ],
     experiments: { typedRoutes: true },
     extra: {
-      apiBaseUrl: process.env.EXPO_PUBLIC_BACKEND_URL || "",
+      apiBaseUrl:
+        process.env.EXPO_PUBLIC_BACKEND_URL || "http://localhost:8000",
     },
   },
 };

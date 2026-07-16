@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+﻿import { useEffect, useMemo, useState } from "react";
 import {
   ScrollView,
   View,
@@ -23,37 +23,12 @@ const TIME_OPTIONS = ["08:00", "08:30", "09:00", "09:30", "10:00", "10:30", "11:
 const WEEKDAY_LABELS = ["Lun", "Mar", "Mer", "Gio", "Ven", "Sab", "Dom"];
 
 
-function toLocalIsoDate(date: Date): string {
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  const day = String(date.getDate()).padStart(2, "0");
-  return `${year}-${month}-${day}`;
-}
-
 function getTomorrowIso(): string {
-  const date = new Date();
-  date.setHours(12, 0, 0, 0);
-  date.setDate(date.getDate() + 1);
-  return toLocalIsoDate(date);
-}
-
-function getMaxBookingIso(): string {
-  const today = new Date();
-  today.setHours(12, 0, 0, 0);
-
-  const originalDay = today.getDate();
-  const maxDate = new Date(today);
-  maxDate.setDate(1);
-  maxDate.setMonth(maxDate.getMonth() + 2);
-
-  const lastDayOfTargetMonth = new Date(
-    maxDate.getFullYear(),
-    maxDate.getMonth() + 1,
-    0,
-  ).getDate();
-
-  maxDate.setDate(Math.min(originalDay, lastDayOfTargetMonth));
-  return toLocalIsoDate(maxDate);
+  const d = new Date();
+  // Mezzogiorno evita slittamenti di data dovuti al fuso orario.
+  d.setHours(12, 0, 0, 0);
+  d.setDate(d.getDate() + 1);
+  return d.toISOString().slice(0, 10);
 }
 export default function Prenota() {
   const [step, setStep] = useState<1 | 2 | 3>(1);
@@ -85,11 +60,8 @@ export default function Prenota() {
     setLoadingAvail(true);
     setError(null);
     api
-      .availability(70, getTomorrowIso())
-      .then((data) => {
-        const maxBookingDate = getMaxBookingIso();
-        setAvailability(data.filter((day) => day.date <= maxBookingDate));
-      })
+      .availability(62, getTomorrowIso())
+      .then((data) => setAvailability(data))
       .catch((e) => setError(e.message))
       .finally(() => setLoadingAvail(false));
   }, [step, vehicle]);

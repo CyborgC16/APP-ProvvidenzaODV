@@ -10,7 +10,6 @@ import smtplib
 import secrets
 import string
 import uuid
-import calendar
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from pathlib import Path
@@ -587,16 +586,6 @@ def _parse_date(d: str) -> datetime:
     return datetime.strptime(d, "%Y-%m-%d")
 
 
-
-def add_calendar_months(day, months: int):
-    """Add calendar months while keeping the last valid day of the target month."""
-    month_index = day.month - 1 + months
-    year = day.year + month_index // 12
-    month = month_index % 12 + 1
-    valid_day = min(day.day, calendar.monthrange(year, month)[1])
-    return day.replace(year=year, month=month, day=valid_day)
-
-
 def validate_booking_day_time(date_str: str, time_str: str):
     """Raise HTTPException if the requested day/time is outside the booking window."""
     try:
@@ -605,19 +594,10 @@ def validate_booking_day_time(date_str: str, time_str: str):
         raise HTTPException(status_code=400, detail="Data non valida")
     if day.weekday() not in OPEN_WEEKDAYS:
         raise HTTPException(status_code=400, detail="Le prenotazioni sono disponibili solo da lunedì a sabato")
+    # not in the past
     today = datetime.now().date()
-    first_bookable = today + timedelta(days=1)
-    last_bookable = add_calendar_months(today, 2)
-    if day.date() < first_bookable:
-        raise HTTPException(
-            status_code=400,
-            detail="È possibile prenotare a partire dal giorno successivo a oggi",
-        )
-    if day.date() > last_bookable:
-        raise HTTPException(
-            status_code=400,
-            detail=f"È possibile prenotare al massimo fino al {last_bookable.strftime('%d/%m/%Y')}",
-        )
+    if day.date() < today:
+        raise HTTPException(status_code=400, detail="Non è possibile prenotare per una data passata")
     if time_str > BOOKING_CUTOFF_TIME:
         raise HTTPException(status_code=400, detail=f"Le prenotazioni sono accettate fino alle {BOOKING_CUTOFF_TIME}")
 
@@ -891,17 +871,12 @@ async def my_slots(user: dict = Depends(require_role("servizio_civile", "admin",
 @api_router.get("/availability", response_model=List[DayAvailability])
 async def availability(date_from: Optional[str] = None, days: int = 14):
     """Public: daily availability for the next `days` open days (Mon-Sat)."""
-    today = datetime.now().date()
-    first_bookable = today + timedelta(days=1)
-    requested_start = first_bookable if not date_from else _parse_date(date_from).date()
-    start = max(requested_start, first_bookable)
-    last_bookable = add_calendar_months(today, 2)
-    days = max(1, min(days, 62))
+    start = datetime.now().date() if not date_from else _parse_date(date_from).date()
     result: List[DayAvailability] = []
     d = start
     checked = 0
-    # Return only open weekdays inside the permitted two-calendar-month window.
-    while len(result) < days and d <= last_bookable and checked < 75:
+    # iterate calendar days, include only open weekdays, up to `days` open days
+    while len([r for r in result]) < days and checked < 60:
         checked += 1
         wd = d.weekday()
         if wd in OPEN_WEEKDAYS:

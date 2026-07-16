@@ -1,4 +1,4 @@
-import { useCallback, useState } from "react";
+﻿import { useCallback, useState } from "react";
 import {
   ScrollView,
   View,
@@ -327,17 +327,18 @@ function AdminDashboard({
           {photoB64 ? (
             <Image source={{ uri: photoB64 }} style={styles.avatar} contentFit="cover" />
           ) : (
-            <View style={[styles.avatar, styles.avatarPlaceholder]}>
-              <Text style={styles.avatarInitial}>{fullName.charAt(0)}</Text>
+            <View style={[styles.avatar, { backgroundColor: COLORS.brandLight, alignItems: "center", justifyContent: "center" }]}>
+              <Text style={{ color: COLORS.brand, fontWeight: "800", fontSize: 16 }}>{fullName.charAt(0)}</Text>
             </View>
           )}
           <View style={styles.profileText}>
-            <Text style={styles.dashTitle}>Ciao, {fullName}</Text>
+            <Text style={styles.dashTitle} numberOfLines={2}>Ciao, {fullName}</Text>
             <Text style={styles.dashSubtitle}>
-              Ruolo: <Text style={styles.roleText}>{role === "admin" ? "VOLONTARIO" : role.toUpperCase()}</Text>
+              Ruolo: <Text style={{ fontWeight: "700", color: COLORS.brand }}>{role === "admin" ? "VOLONTARIO" : role.toUpperCase()}</Text>
             </Text>
           </View>
         </View>
+
         <View style={styles.headerActions}>
           <LangToggle />
           <NotificationsBell />
@@ -532,15 +533,16 @@ function CivilServiceDashboard({ onLogout, fullName, onOpenSettings }: { onLogou
           {user?.photo_b64 ? (
             <Image source={{ uri: user.photo_b64 }} style={styles.avatar} contentFit="cover" />
           ) : (
-            <View style={[styles.avatar, styles.avatarPlaceholder]}>
-              <Text style={styles.avatarInitial}>{fullName.charAt(0)}</Text>
+            <View style={[styles.avatar, { backgroundColor: COLORS.brandLight, alignItems: "center", justifyContent: "center" }]}>
+              <Text style={{ color: COLORS.brand, fontWeight: "800", fontSize: 16 }}>{fullName.charAt(0)}</Text>
             </View>
           )}
           <View style={styles.profileText}>
-            <Text style={styles.dashTitle}>Ciao, {fullName}</Text>
+            <Text style={styles.dashTitle} numberOfLines={2}>Ciao, {fullName}</Text>
             <Text style={styles.dashSubtitle}>Servizio Civile</Text>
           </View>
         </View>
+
         <View style={styles.headerActions}>
           <LangToggle />
           <Pressable onPress={() => setShowProfile(true)} hitSlop={10} testID="open-profile-btn" style={styles.iconBtn}>
@@ -763,9 +765,7 @@ const styles = StyleSheet.create({
   },
   errorText: { color: COLORS.white, flex: 1, fontSize: 13 },
   dashHeader: {
-    paddingHorizontal: SPACING.lg,
-    paddingTop: SPACING.md,
-    paddingBottom: SPACING.md,
+    padding: SPACING.lg,
     rowGap: SPACING.md,
     backgroundColor: COLORS.surfaceSecondary,
     borderBottomWidth: 1,
@@ -791,31 +791,22 @@ const styles = StyleSheet.create({
     rowGap: SPACING.sm,
   },
   dashTitle: {
-    fontSize: 20,
-    lineHeight: 25,
+    fontSize: 17,
+    lineHeight: 22,
     fontWeight: "700",
     color: COLORS.navy,
-    flexShrink: 1,
   },
   dashSubtitle: {
-    fontSize: 13,
-    lineHeight: 18,
+    fontSize: 12,
     color: COLORS.onSurfaceMuted,
     marginTop: 2,
   },
-  roleText: { fontWeight: "700", color: COLORS.brand },
   iconBtn: {
-    minWidth: 44,
-    minHeight: 44,
-    alignItems: "center",
-    justifyContent: "center",
     padding: 8,
     borderRadius: RADIUS.sm,
     backgroundColor: COLORS.surfaceTertiary,
   },
-  avatar: { width: 56, height: 56, borderRadius: 28, flexShrink: 0 },
-  avatarPlaceholder: { backgroundColor: COLORS.brandLight, alignItems: "center", justifyContent: "center" },
-  avatarInitial: { color: COLORS.brand, fontWeight: "800", fontSize: 18 },
+  avatar: { width: 44, height: 44, borderRadius: 22 },
   profileModal: { flex: 1, backgroundColor: "rgba(0,0,0,0.5)", justifyContent: "flex-end" },
   profileCard: { backgroundColor: COLORS.surface, borderTopLeftRadius: RADIUS.lg, borderTopRightRadius: RADIUS.lg, padding: SPACING.lg, maxHeight: "92%" },
   modalTitle: { fontSize: 18, fontWeight: "700", color: COLORS.navy, marginBottom: SPACING.md, textAlign: "center" },

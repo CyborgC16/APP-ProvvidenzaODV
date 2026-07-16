@@ -1,4 +1,4 @@
-import { useCallback, useState } from "react";
+﻿import { useCallback, useState } from "react";
 import {
   ScrollView,
   View,
@@ -323,34 +323,30 @@ function AdminDashboard({
   return (
     <SafeAreaView style={styles.safe} edges={["top"]} testID="admin-dashboard">
       <View style={styles.dashHeader}>
-        <View style={styles.profileRow}>
-          {photoB64 ? (
-            <Image source={{ uri: photoB64 }} style={styles.avatar} contentFit="cover" />
-          ) : (
-            <View style={[styles.avatar, styles.avatarPlaceholder]}>
-              <Text style={styles.avatarInitial}>{fullName.charAt(0)}</Text>
-            </View>
-          )}
-          <View style={styles.profileText}>
-            <Text style={styles.dashTitle}>Ciao, {fullName}</Text>
-            <Text style={styles.dashSubtitle}>
-              Ruolo: <Text style={styles.roleText}>{role === "admin" ? "VOLONTARIO" : role.toUpperCase()}</Text>
-            </Text>
+        {photoB64 ? (
+          <Image source={{ uri: photoB64 }} style={styles.avatar} contentFit="cover" />
+        ) : (
+          <View style={[styles.avatar, { backgroundColor: COLORS.brandLight, alignItems: "center", justifyContent: "center" }]}>
+            <Text style={{ color: COLORS.brand, fontWeight: "800", fontSize: 16 }}>{fullName.charAt(0)}</Text>
           </View>
+        )}
+        <View style={{ flex: 1 }}>
+          <Text style={styles.dashTitle}>Ciao, {fullName}</Text>
+          <Text style={styles.dashSubtitle}>
+            Ruolo: <Text style={{ fontWeight: "700", color: COLORS.brand }}>{role === "admin" ? "VOLONTARIO" : role.toUpperCase()}</Text>
+          </Text>
         </View>
-        <View style={styles.headerActions}>
-          <LangToggle />
-          <NotificationsBell />
-          <Pressable onPress={onOpenProfile} hitSlop={10} testID="open-admin-profile" style={styles.iconBtn}>
-            <Ionicons name="create-outline" size={22} color={COLORS.navy} />
-          </Pressable>
-          <Pressable onPress={onOpenSettings} hitSlop={10} testID="open-settings-btn" style={styles.iconBtn}>
-            <Ionicons name="settings-outline" size={22} color={COLORS.navy} />
-          </Pressable>
-          <Pressable onPress={onLogout} hitSlop={10} testID="logout-btn" style={styles.iconBtn}>
-            <Ionicons name="log-out-outline" size={22} color={COLORS.navy} />
-          </Pressable>
-        </View>
+        <LangToggle />
+        <NotificationsBell />
+        <Pressable onPress={onOpenProfile} hitSlop={10} testID="open-admin-profile" style={styles.iconBtn}>
+          <Ionicons name="create-outline" size={22} color={COLORS.navy} />
+        </Pressable>
+        <Pressable onPress={onOpenSettings} hitSlop={10} testID="open-settings-btn" style={styles.iconBtn}>
+          <Ionicons name="settings-outline" size={22} color={COLORS.navy} />
+        </Pressable>
+        <Pressable onPress={onLogout} hitSlop={10} testID="logout-btn" style={styles.iconBtn}>
+          <Ionicons name="log-out-outline" size={22} color={COLORS.navy} />
+        </Pressable>
       </View>
 
       <ScrollView
@@ -528,31 +524,27 @@ function CivilServiceDashboard({ onLogout, fullName, onOpenSettings }: { onLogou
   return (
     <SafeAreaView style={styles.safe} edges={["top"]} testID="civil-service-dashboard">
       <View style={styles.dashHeader}>
-        <View style={styles.profileRow}>
-          {user?.photo_b64 ? (
-            <Image source={{ uri: user.photo_b64 }} style={styles.avatar} contentFit="cover" />
-          ) : (
-            <View style={[styles.avatar, styles.avatarPlaceholder]}>
-              <Text style={styles.avatarInitial}>{fullName.charAt(0)}</Text>
-            </View>
-          )}
-          <View style={styles.profileText}>
-            <Text style={styles.dashTitle}>Ciao, {fullName}</Text>
-            <Text style={styles.dashSubtitle}>Servizio Civile</Text>
+        {user?.photo_b64 ? (
+          <Image source={{ uri: user.photo_b64 }} style={styles.avatar} contentFit="cover" />
+        ) : (
+          <View style={[styles.avatar, { backgroundColor: COLORS.brandLight, alignItems: "center", justifyContent: "center" }]}>
+            <Text style={{ color: COLORS.brand, fontWeight: "800", fontSize: 16 }}>{fullName.charAt(0)}</Text>
           </View>
+        )}
+        <View style={{ flex: 1 }}>
+          <Text style={styles.dashTitle}>Ciao, {fullName}</Text>
+          <Text style={styles.dashSubtitle}>Servizio Civile</Text>
         </View>
-        <View style={styles.headerActions}>
-          <LangToggle />
-          <Pressable onPress={() => setShowProfile(true)} hitSlop={10} testID="open-profile-btn" style={styles.iconBtn}>
-            <Ionicons name="create-outline" size={22} color={COLORS.navy} />
-          </Pressable>
-          <Pressable onPress={onOpenSettings} hitSlop={10} testID="open-settings-btn-sc" style={styles.iconBtn}>
-            <Ionicons name="settings-outline" size={22} color={COLORS.navy} />
-          </Pressable>
-          <Pressable onPress={onLogout} hitSlop={10} testID="logout-btn" style={styles.iconBtn}>
-            <Ionicons name="log-out-outline" size={22} color={COLORS.navy} />
-          </Pressable>
-        </View>
+        <LangToggle />
+        <Pressable onPress={() => setShowProfile(true)} hitSlop={10} testID="open-profile-btn" style={styles.iconBtn}>
+          <Ionicons name="create-outline" size={22} color={COLORS.navy} />
+        </Pressable>
+        <Pressable onPress={onOpenSettings} hitSlop={10} testID="open-settings-btn-sc" style={styles.iconBtn}>
+          <Ionicons name="settings-outline" size={22} color={COLORS.navy} />
+        </Pressable>
+        <Pressable onPress={onLogout} hitSlop={10} testID="logout-btn" style={styles.iconBtn}>
+          <Ionicons name="log-out-outline" size={22} color={COLORS.navy} />
+        </Pressable>
       </View>
 
       <ProfileEditor visible={showProfile} onClose={() => setShowProfile(false)} onSaved={refresh} />
@@ -763,59 +755,36 @@ const styles = StyleSheet.create({
   },
   errorText: { color: COLORS.white, flex: 1, fontSize: 13 },
   dashHeader: {
-    paddingHorizontal: SPACING.lg,
-    paddingTop: SPACING.md,
-    paddingBottom: SPACING.md,
-    rowGap: SPACING.md,
+    flexDirection: "row",
+    alignItems: "center",
+    flexWrap: "wrap",
+    padding: SPACING.lg,
+    columnGap: SPACING.sm,
+    rowGap: SPACING.sm,
     backgroundColor: COLORS.surfaceSecondary,
     borderBottomWidth: 1,
     borderBottomColor: COLORS.border,
   },
-  profileRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    width: "100%",
-    columnGap: SPACING.md,
-  },
-  profileText: {
-    flex: 1,
-    minWidth: 0,
-  },
-  headerActions: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "flex-end",
-    flexWrap: "wrap",
-    width: "100%",
-    columnGap: SPACING.sm,
-    rowGap: SPACING.sm,
-  },
   dashTitle: {
-    fontSize: 20,
-    lineHeight: 25,
+    width: 190,
+    flexShrink: 0,
+    fontSize: 17,
     fontWeight: "700",
     color: COLORS.navy,
-    flexShrink: 1,
   },
   dashSubtitle: {
-    fontSize: 13,
-    lineHeight: 18,
+    width: 190,
+    flexShrink: 0,
+    fontSize: 12,
     color: COLORS.onSurfaceMuted,
     marginTop: 2,
   },
-  roleText: { fontWeight: "700", color: COLORS.brand },
   iconBtn: {
-    minWidth: 44,
-    minHeight: 44,
-    alignItems: "center",
-    justifyContent: "center",
     padding: 8,
     borderRadius: RADIUS.sm,
     backgroundColor: COLORS.surfaceTertiary,
   },
-  avatar: { width: 56, height: 56, borderRadius: 28, flexShrink: 0 },
-  avatarPlaceholder: { backgroundColor: COLORS.brandLight, alignItems: "center", justifyContent: "center" },
-  avatarInitial: { color: COLORS.brand, fontWeight: "800", fontSize: 18 },
+  avatar: { width: 44, height: 44, borderRadius: 22 },
   profileModal: { flex: 1, backgroundColor: "rgba(0,0,0,0.5)", justifyContent: "flex-end" },
   profileCard: { backgroundColor: COLORS.surface, borderTopLeftRadius: RADIUS.lg, borderTopRightRadius: RADIUS.lg, padding: SPACING.lg, maxHeight: "92%" },
   modalTitle: { fontSize: 18, fontWeight: "700", color: COLORS.navy, marginBottom: SPACING.md, textAlign: "center" },
