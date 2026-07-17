@@ -1,4 +1,4 @@
-﻿"""Backend tests for La Provvidenza ODV API."""
+"""Backend tests for La Provvidenza ODV API."""
 import os
 import uuid
 import pytest

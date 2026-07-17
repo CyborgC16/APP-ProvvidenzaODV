@@ -8,15 +8,26 @@ services:
       MONGO_INITDB_ROOT_PASSWORD: ${MONGO_ROOT_PASSWORD}
       MONGO_INITDB_DATABASE: ${MONGO_DATABASE}
     volumes:
-      - mongodb_data:/data/db
-    networks: [provvidenza-network]
+    - mongodb_data:/data/db
+    networks:
+    - provvidenza-network
     healthcheck:
-      test: ["CMD", "mongosh", "--quiet", "--username", "${MONGO_ROOT_USERNAME}", "--password", "${MONGO_ROOT_PASSWORD}", "--authenticationDatabase", "admin", "--eval", "db.adminCommand('ping')"]
+      test:
+      - CMD
+      - mongosh
+      - --quiet
+      - --username
+      - ${MONGO_ROOT_USERNAME}
+      - --password
+      - ${MONGO_ROOT_PASSWORD}
+      - --authenticationDatabase
+      - admin
+      - --eval
+      - db.adminCommand('ping')
       interval: 10s
       timeout: 5s
       retries: 10
       start_period: 20s
-
   backend:
     build:
       context: ../backend
@@ -39,48 +50,43 @@ services:
       BOOKING_TO_EMAIL: ${BOOKING_TO_EMAIL}
       BOOKING_CC_EMAIL: ${BOOKING_CC_EMAIL}
       BOOKING_SUBJECT: ${BOOKING_SUBJECT}
+      PRODUCTION: 'true'
     ports:
-      - "127.0.0.1:8000:8000"
+    - 127.0.0.1:8000:8000
     depends_on:
       mongodb:
         condition: service_healthy
-    networks: [provvidenza-network]
+    networks:
+    - provvidenza-network
     healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/openapi.json', timeout=3)"]
+      test:
+      - CMD
+      - python
+      - -c
+      - import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/',
+        timeout=3)
       interval: 15s
       timeout: 5s
       retries: 5
       start_period: 20s
-
   frontend:
     build:
       context: ../frontend
       dockerfile: Dockerfile
       args:
-        EXPO_PUBLIC_BACKEND_URL: ${EXPO_PUBLIC_BACKEND_URL:-https://app.laprovidenza.it}
+        EXPO_PUBLIC_BACKEND_URL: ${EXPO_PUBLIC_BACKEND_URL:-https://app.laprovvidenza.it}
     container_name: provvidenza-frontend
     restart: unless-stopped
     ports:
-      - "127.0.0.1:8080:80"
+    - 127.0.0.1:8080:80
     depends_on:
       backend:
         condition: service_healthy
-    networks: [provvidenza-network]
-
-  cloudflared:
-    image: cloudflare/cloudflared:latest
-    container_name: provvidenza-cloudflared
-    restart: unless-stopped
-    command: tunnel --no-autoupdate run --token ${CLOUDFLARE_TUNNEL_TOKEN}
-    depends_on:
-      frontend:
-        condition: service_healthy
-    networks: [provvidenza-network]
-
+    networks:
+    - provvidenza-network
 volumes:
   mongodb_data:
     name: provvidenza-mongodb-data
-
 networks:
   provvidenza-network:
     name: provvidenza-network

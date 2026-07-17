@@ -1,4 +1,4 @@
-package it.laprovvidenza.app
+package it.laprovvindenza.app
 
 import android.app.Application
 import android.content.res.Configuration

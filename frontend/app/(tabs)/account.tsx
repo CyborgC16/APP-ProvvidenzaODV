@@ -28,7 +28,7 @@ import ManualBookingModal from "@/src/components/ManualBookingModal";
 import { pickImageBase64 } from "@/src/utils/picker";
 
 export default function Account() {
-  const { user, loading, logout, login, refresh } = useAuth();
+  const { user, loading, logout, login, refresh, biometricAvailable, biometricEnabled, enableBiometric, biometricLogin } = useAuth();
   const router = useRouter();
   const [showAdminProfile, setShowAdminProfile] = useState(false);
 
@@ -40,7 +40,17 @@ export default function Account() {
     );
   }
 
-  if (!user) return <LoginView onLogin={login} />;
+  if (!user) {
+    return (
+      <LoginView
+        onLogin={login}
+        biometricAvailable={biometricAvailable}
+        biometricEnabled={biometricEnabled}
+        onEnableBiometric={enableBiometric}
+        onBiometricLogin={biometricLogin}
+      />
+    );
+  }
 
   // Force password change on first login
   if (user.must_change_password) {
@@ -144,7 +154,19 @@ function ForceChangePassword({ onDone }: { onDone: () => Promise<void> }) {
 }
 
 // ===== LOGIN =====
-function LoginView({ onLogin }: { onLogin: (u: string, p: string) => Promise<any> }) {
+function LoginView({
+  onLogin,
+  biometricAvailable,
+  biometricEnabled,
+  onEnableBiometric,
+  onBiometricLogin,
+}: {
+  onLogin: (u: string, p: string) => Promise<any>;
+  biometricAvailable: boolean;
+  biometricEnabled: boolean;
+  onEnableBiometric: (u: string, p: string) => Promise<boolean>;
+  onBiometricLogin: () => Promise<any>;
+}) {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
@@ -155,9 +177,40 @@ function LoginView({ onLogin }: { onLogin: (u: string, p: string) => Promise<any
     setLoading(true);
     setErr(null);
     try {
-      await onLogin(username.trim(), password);
+      const cleanUsername = username.trim();
+      await onLogin(cleanUsername, password);
+      if (biometricAvailable && !biometricEnabled) {
+        Alert.alert(
+          "Accesso biometrico",
+          "Vuoi usare impronta digitale o riconoscimento del volto per i prossimi accessi? Le credenziali saranno conservate nell'area protetta del dispositivo.",
+          [
+            { text: "Non ora", style: "cancel" },
+            {
+              text: "Attiva",
+              onPress: async () => {
+                const enabled = await onEnableBiometric(cleanUsername, password);
+                if (!enabled) {
+                  Alert.alert("Accesso biometrico", "Non è stato possibile attivarlo. Verifica che sul telefono sia configurata un'impronta o il riconoscimento del volto.");
+                }
+              },
+            },
+          ],
+        );
+      }
     } catch (e: any) {
       setErr(e.message || "Login fallito");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleBiometricLogin = async () => {
+    setLoading(true);
+    setErr(null);
+    try {
+      await onBiometricLogin();
+    } catch (e: any) {
+      setErr(e.message || "Accesso biometrico non riuscito");
     } finally {
       setLoading(false);
     }
@@ -167,7 +220,7 @@ function LoginView({ onLogin }: { onLogin: (u: string, p: string) => Promise<any
     <SafeAreaView style={styles.safe} testID="login-screen">
       <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} style={{ flex: 1 }}>
         <ScrollView contentContainerStyle={styles.loginScroll} keyboardShouldPersistTaps="handled">
-          <Image source={{ uri: LOGO_URL }} style={styles.loginLogo} contentFit="contain" />
+          <Image source={LOGO_URL} style={styles.loginLogo} contentFit="contain" />
           <Text style={styles.loginTitle}>Area Riservata</Text>
           <Text style={styles.loginSubtitle}>Accesso volontari e servizio civile</Text>
 
@@ -195,7 +248,7 @@ function LoginView({ onLogin }: { onLogin: (u: string, p: string) => Promise<any
             onChangeText={setPassword}
             secureTextEntry
             style={styles.input}
-            placeholder="â€¢â€¢â€¢â€¢â€¢â€¢â€¢â€¢"
+            placeholder="••••••••"
             placeholderTextColor={COLORS.onSurfaceMuted}
           />
           <Pressable
@@ -207,8 +260,20 @@ function LoginView({ onLogin }: { onLogin: (u: string, p: string) => Promise<any
             {loading ? <ActivityIndicator color={COLORS.white} /> : <Text style={styles.primaryBtnText}>Accedi</Text>}
           </Pressable>
 
+          {biometricEnabled ? (
+            <Pressable
+              testID="biometric-login-button"
+              onPress={handleBiometricLogin}
+              disabled={loading}
+              style={styles.biometricBtn}
+            >
+              <Ionicons name="finger-print" size={22} color={COLORS.brand} />
+              <Text style={styles.biometricBtnText}>Accedi con biometria</Text>
+            </Pressable>
+          ) : null}
+
           <Text style={styles.loginNote}>
-            Le credenziali sono fornite dagli amministratori. La registrazione autonoma non Ã¨
+            Le credenziali sono fornite dagli amministratori. La registrazione autonoma non è
             consentita.
           </Text>
 
@@ -216,7 +281,7 @@ function LoginView({ onLogin }: { onLogin: (u: string, p: string) => Promise<any
             <Pressable onPress={() => router.push("/legal/privacy")} testID="login-privacy">
               <Text style={styles.legalLink}>Privacy</Text>
             </Pressable>
-            <Text style={styles.legalSep}>Â·</Text>
+            <Text style={styles.legalSep}>·</Text>
             <Pressable onPress={() => router.push("/legal/terms")} testID="login-terms">
               <Text style={styles.legalLink}>Termini</Text>
             </Pressable>
@@ -301,7 +366,7 @@ function AdminDashboard({
     if (typeof Alert.prompt === "function") {
       Alert.prompt(
         "Annulla prenotazione",
-        "Motivo (facoltativo). VerrÃ  inviata email di annullamento se disponibile.",
+        "Motivo (facoltativo). Verrà inviata email di annullamento se disponibile.",
         [
           { text: "Indietro", style: "cancel" },
           { text: "Annulla prenotazione", style: "destructive", onPress: (reason?: string) => doCancel(reason) },
@@ -311,7 +376,7 @@ function AdminDashboard({
     } else {
       Alert.alert(
         "Annulla prenotazione",
-        "Confermi l'annullamento? VerrÃ  inviata email di annullamento al prenotante (se disponibile).",
+        "Confermi l'annullamento? Verrà inviata email di annullamento al prenotante (se disponibile).",
         [
           { text: "Indietro", style: "cancel" },
           { text: "Annulla prenotazione", style: "destructive", onPress: () => doCancel() },
@@ -327,19 +392,19 @@ function AdminDashboard({
           {photoB64 ? (
             <Image source={{ uri: photoB64 }} style={styles.avatar} contentFit="cover" />
           ) : (
-            <View style={[styles.avatar, styles.avatarPlaceholder]}>
+            <View style={[styles.avatar, styles.avatarFallback]}>
               <Text style={styles.avatarInitial}>{fullName.charAt(0)}</Text>
             </View>
           )}
-          <View style={styles.profileText}>
-            <Text style={styles.dashTitle}>Ciao, {fullName}</Text>
-            <Text style={styles.dashSubtitle}>
+          <View style={styles.profileTextWrap}>
+            <Text style={styles.dashTitle} numberOfLines={1}>Ciao, {fullName}</Text>
+            <Text style={styles.dashSubtitle} numberOfLines={1}>
               Ruolo: <Text style={styles.roleText}>{role === "admin" ? "VOLONTARIO" : role.toUpperCase()}</Text>
             </Text>
           </View>
         </View>
         <View style={styles.headerActions}>
-          <LangToggle />
+          <View style={styles.languageWrap}><LangToggle /></View>
           <NotificationsBell />
           <Pressable onPress={onOpenProfile} hitSlop={10} testID="open-admin-profile" style={styles.iconBtn}>
             <Ionicons name="create-outline" size={22} color={COLORS.navy} />
@@ -396,7 +461,7 @@ function AdminDashboard({
         refreshControl={<RefreshControl refreshing={loading} onRefresh={load} tintColor={COLORS.brand} />}
       >
         <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle}>DisponibilitÃ  del giorno</Text>
+          <Text style={styles.sectionTitle}>Disponibilità del giorno</Text>
         </View>
         {avail ? (
           <View style={styles.availRow}>
@@ -432,14 +497,14 @@ function AdminDashboard({
               <View key={b.id} style={[styles.bookingCard, cancelled && { opacity: 0.6 }]} testID={`admin-booking-${b.id}`}>
                 <View style={styles.bookingHeader}>
                   <Text style={styles.bookingTime}>
-                    {b.slot_time} Â· {b.vehicle_type === "ambulanza" ? "Ambulanza" : "Furgone"}
+                    {b.slot_time} · {b.vehicle_type === "ambulanza" ? "Ambulanza" : "Furgone"}
                   </Text>
                   <View style={[styles.statusBadge, { backgroundColor: badgeColor }]}>
                     <Text style={[styles.statusBadgeText, { color: COLORS.white }]}>{b.status}</Text>
                   </View>
                 </View>
                 {b.source === "manual" ? (
-                  <Text style={styles.sourceTag}>ðŸ“ž Registrata da volontario</Text>
+                  <Text style={styles.sourceTag}>📞 Registrata da volontario</Text>
                 ) : null}
                 <Text style={styles.bookingName}>
                   {b.requester_name}
@@ -450,12 +515,12 @@ function AdminDashboard({
                 ) : null}
                 {b.address ? <Text style={styles.bookingMeta}>{b.address}</Text> : null}
                 <Text style={styles.bookingMeta}>
-                  Tel: {b.phone || "-"}{b.email ? ` Â· Email: ${b.email}` : ""}
+                  Tel: {b.phone || "-"}{b.email ? ` · Email: ${b.email}` : ""}
                 </Text>
                 {b.floor !== null && b.floor !== undefined ? (
                   <Text style={styles.bookingMeta}>
-                    Piano {b.floor} Â· Ascensore: {b.has_elevator ? "SÃ¬" : "No"}
-                    {b.patient_weight_class ? ` Â· ${b.patient_weight_class}` : ""}
+                    Piano {b.floor} · Ascensore: {b.has_elevator ? "Sì" : "No"}
+                    {b.patient_weight_class ? ` · ${b.patient_weight_class}` : ""}
                   </Text>
                 ) : null}
                 {b.notes ? <Text style={styles.bookingMeta}>Note: {b.notes}</Text> : null}
@@ -532,17 +597,17 @@ function CivilServiceDashboard({ onLogout, fullName, onOpenSettings }: { onLogou
           {user?.photo_b64 ? (
             <Image source={{ uri: user.photo_b64 }} style={styles.avatar} contentFit="cover" />
           ) : (
-            <View style={[styles.avatar, styles.avatarPlaceholder]}>
+            <View style={[styles.avatar, styles.avatarFallback]}>
               <Text style={styles.avatarInitial}>{fullName.charAt(0)}</Text>
             </View>
           )}
-          <View style={styles.profileText}>
-            <Text style={styles.dashTitle}>Ciao, {fullName}</Text>
-            <Text style={styles.dashSubtitle}>Servizio Civile</Text>
+          <View style={styles.profileTextWrap}>
+            <Text style={styles.dashTitle} numberOfLines={1}>Ciao, {fullName}</Text>
+            <Text style={styles.dashSubtitle} numberOfLines={1}>Servizio Civile</Text>
           </View>
         </View>
         <View style={styles.headerActions}>
-          <LangToggle />
+          <View style={styles.languageWrap}><LangToggle /></View>
           <Pressable onPress={() => setShowProfile(true)} hitSlop={10} testID="open-profile-btn" style={styles.iconBtn}>
             <Ionicons name="create-outline" size={22} color={COLORS.navy} />
           </Pressable>
@@ -577,7 +642,7 @@ function CivilServiceDashboard({ onLogout, fullName, onOpenSettings }: { onLogou
                   </View>
                   <View style={{ flex: 1 }}>
                     <Text style={styles.itemTitle}>
-                      {s.time} Â· {s.vehicle_type === "ambulanza" ? "Ambulanza" : "Furgone"}
+                      {s.time} · {s.vehicle_type === "ambulanza" ? "Ambulanza" : "Furgone"}
                     </Text>
                     {s.notes ? <Text style={styles.itemSub}>{s.notes}</Text> : null}
                   </View>
@@ -680,7 +745,7 @@ function ProfileEditor({ visible, onClose, onSaved }: { visible: boolean; onClos
           </View>
           <Text style={styles.fieldLabel}>Nome completo</Text>
           <TextInput value={fullName} onChangeText={setFullName} style={styles.input} testID="profile-fullname" />
-          <Text style={styles.fieldLabel}>EtÃ </Text>
+          <Text style={styles.fieldLabel}>Età</Text>
           <TextInput value={age} onChangeText={setAge} keyboardType="numeric" style={styles.input} testID="profile-age" />
           <Text style={styles.fieldLabel}>Bio breve</Text>
           <TextInput value={bio} onChangeText={setBio} multiline style={[styles.input, { height: 90, textAlignVertical: "top" }]} testID="profile-bio" />
@@ -691,7 +756,7 @@ function ProfileEditor({ visible, onClose, onSaved }: { visible: boolean; onClos
             testID="toggle-notify-email"
           >
             <View style={{ flex: 1 }}>
-              <Text style={styles.toggleTitle}>ðŸ”” Notifiche email avvisi</Text>
+              <Text style={styles.toggleTitle}>🔔 Notifiche email avvisi</Text>
               <Text style={styles.toggleHint}>
                 Ricevi via email gli avvisi pubblicati da master/volontari
               </Text>
@@ -702,7 +767,7 @@ function ProfileEditor({ visible, onClose, onSaved }: { visible: boolean; onClos
           </Pressable>
 
           <Text style={styles.hint}>
-            ðŸ’¡ Per aggiungere ruolo, data di ingresso e data di nascita, tocca la tua foto nella pagina
+            💡 Per aggiungere ruolo, data di ingresso e data di nascita, tocca la tua foto nella pagina
             &quot;Volontari&quot; o &quot;Servizio Civile&quot; e premi Modifica.
           </Text>
 
@@ -748,6 +813,19 @@ const styles = StyleSheet.create({
     marginTop: SPACING.sm,
   },
   primaryBtnText: { color: COLORS.white, fontWeight: "700", fontSize: 15 },
+  biometricBtn: {
+    marginTop: SPACING.md,
+    minHeight: 48,
+    borderRadius: RADIUS.md,
+    borderWidth: 1,
+    borderColor: COLORS.brand,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: SPACING.sm,
+    backgroundColor: COLORS.surfaceSecondary,
+  },
+  biometricBtnText: { color: COLORS.brand, fontWeight: "700", fontSize: 15 },
   loginNote: { fontSize: 12, color: COLORS.onSurfaceMuted, textAlign: "center", marginTop: SPACING.xl, lineHeight: 18 },
   loginLegal: { flexDirection: "row", justifyContent: "center", gap: SPACING.sm, marginTop: SPACING.md },
   legalLink: { color: COLORS.brand, fontWeight: "600", fontSize: 12, textDecorationLine: "underline" },
@@ -766,56 +844,49 @@ const styles = StyleSheet.create({
     paddingHorizontal: SPACING.lg,
     paddingTop: SPACING.md,
     paddingBottom: SPACING.md,
-    rowGap: SPACING.md,
     backgroundColor: COLORS.surfaceSecondary,
     borderBottomWidth: 1,
     borderBottomColor: COLORS.border,
+    gap: SPACING.md,
   },
   profileRow: {
     flexDirection: "row",
     alignItems: "center",
-    width: "100%",
-    columnGap: SPACING.md,
-  },
-  profileText: {
-    flex: 1,
+    gap: SPACING.md,
     minWidth: 0,
   },
+  profileTextWrap: { flex: 1, minWidth: 0 },
+  dashTitle: {
+    fontSize: 20,
+    fontWeight: "800",
+    color: COLORS.navy,
+  },
+  dashSubtitle: {
+    fontSize: 13,
+    color: COLORS.onSurfaceMuted,
+    marginTop: 3,
+  },
+  roleText: { fontWeight: "800", color: COLORS.brand },
   headerActions: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "flex-end",
+    gap: SPACING.sm,
     flexWrap: "wrap",
-    width: "100%",
-    columnGap: SPACING.sm,
-    rowGap: SPACING.sm,
   },
-  dashTitle: {
-    fontSize: 20,
-    lineHeight: 25,
-    fontWeight: "700",
-    color: COLORS.navy,
-    flexShrink: 1,
-  },
-  dashSubtitle: {
-    fontSize: 13,
-    lineHeight: 18,
-    color: COLORS.onSurfaceMuted,
-    marginTop: 2,
-  },
-  roleText: { fontWeight: "700", color: COLORS.brand },
-  iconBtn: {
-    minWidth: 44,
-    minHeight: 44,
+  languageWrap: { marginRight: "auto" },
+  avatarFallback: {
+    backgroundColor: COLORS.brandLight,
     alignItems: "center",
     justifyContent: "center",
+  },
+  avatarInitial: { color: COLORS.brand, fontWeight: "800", fontSize: 18 },
+  iconBtn: {
     padding: 8,
     borderRadius: RADIUS.sm,
     backgroundColor: COLORS.surfaceTertiary,
   },
-  avatar: { width: 56, height: 56, borderRadius: 28, flexShrink: 0 },
-  avatarPlaceholder: { backgroundColor: COLORS.brandLight, alignItems: "center", justifyContent: "center" },
-  avatarInitial: { color: COLORS.brand, fontWeight: "800", fontSize: 18 },
+  avatar: { width: 44, height: 44, borderRadius: 22 },
   profileModal: { flex: 1, backgroundColor: "rgba(0,0,0,0.5)", justifyContent: "flex-end" },
   profileCard: { backgroundColor: COLORS.surface, borderTopLeftRadius: RADIUS.lg, borderTopRightRadius: RADIUS.lg, padding: SPACING.lg, maxHeight: "92%" },
   modalTitle: { fontSize: 18, fontWeight: "700", color: COLORS.navy, marginBottom: SPACING.md, textAlign: "center" },

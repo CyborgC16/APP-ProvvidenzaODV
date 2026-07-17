@@ -42,7 +42,7 @@ function Splash() {
   return (
     <LinearGradient colors={[COLORS.cream, COLORS.surface]} style={styles.container} testID="splash-screen">
       <Animated.View style={[styles.logoWrap, { transform: [{ scale }], opacity }]}>
-        <Image source={{ uri: LOGO_URL }} style={styles.logo} contentFit="contain" />
+        <Image source={LOGO_URL} style={styles.logo} contentFit="contain" />
       </Animated.View>
       <Text style={styles.title} testID="splash-title">La Provvidenza ODV</Text>
       <Text style={styles.subtitle}>Pubblica Assistenza · Marsala</Text>

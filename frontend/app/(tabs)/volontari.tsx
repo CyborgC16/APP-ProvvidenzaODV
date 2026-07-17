@@ -38,7 +38,7 @@ export default function Volontari() {
       </View>
       <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
         <View style={styles.cover}>
-          <Image source={{ uri: AMBULANCE_IMAGE }} style={StyleSheet.absoluteFill} contentFit="cover" />
+          <Image source={AMBULANCE_IMAGE} style={StyleSheet.absoluteFill} contentFit="cover" />
           <LinearGradient colors={["rgba(0,0,0,0.1)", "rgba(0,0,0,0.75)"]} style={StyleSheet.absoluteFill} />
           <View style={styles.coverContent}>
             <Text style={styles.coverEyebrow}>{t("vol_eyebrow")}</Text>

@@ -37,7 +37,7 @@ function PhoneMockup({ scale = 1 }: { scale?: number }) {
           },
         ]}
       >
-        <Image source={{ uri: HERO_IMAGE }} style={styles.phoneScreen} contentFit="cover" />
+        <Image source={HERO_IMAGE} style={styles.phoneScreen} contentFit="cover" />
       </View>
       {/* front phone */}
       <View
@@ -47,7 +47,7 @@ function PhoneMockup({ scale = 1 }: { scale?: number }) {
         ]}
       >
         <View style={styles.notch} />
-        <Image source={{ uri: ABOUT_IMAGE }} style={styles.phoneScreen} contentFit="cover" />
+        <Image source={ABOUT_IMAGE} style={styles.phoneScreen} contentFit="cover" />
       </View>
     </View>
   );
@@ -99,7 +99,7 @@ export default function Landing() {
       {/* Top bar */}
       <View style={styles.topbar}>
         <Pressable style={styles.brand} onPress={() => goTo(0)}>
-          <Image source={{ uri: LOGO_URL }} style={styles.logo} contentFit="contain" />
+          <Image source={LOGO_URL} style={styles.logo} contentFit="contain" />
           <View>
             <Text style={styles.brandName}>La Provvidenza ODV</Text>
             <Text style={styles.brandSub}>Pubblica Assistenza · Marsala</Text>

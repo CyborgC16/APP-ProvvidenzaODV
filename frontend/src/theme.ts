@@ -1,34 +1,4 @@
-﻿import { Platform, Image as RNImage } from "react-native";
-
-const localAssetUri = (asset: unknown): string => {
-  if (typeof asset === "string") {
-    return asset;
-  }
-
-  if (asset && typeof asset === "object") {
-    const value = asset as {
-      uri?: string;
-      default?: string;
-    };
-
-    if (typeof value.uri === "string") {
-      return value.uri;
-    }
-
-    if (typeof value.default === "string") {
-      return value.default;
-    }
-  }
-
-  if (
-    Platform.OS !== "web" &&
-    typeof RNImage.resolveAssetSource === "function"
-  ) {
-    return RNImage.resolveAssetSource(asset as number)?.uri ?? "";
-  }
-
-  return "";
-};
+import { Platform } from "react-native";
 
 export const COLORS = {
   surface: "#FDFBF7",
@@ -95,31 +65,16 @@ export const SHADOW = {
   },
 };
 
-export const LOGO_URL =
-  localAssetUri(require("../assets/provvidenza/logo.png"));
+export const LOGO_IMAGE = require("@/assets/images/app/logo.png");
+export const HERO_IMAGE = require("@/assets/images/app/home-ambulanza.png");
+export const AMBULANCE_IMAGE = require("@/assets/images/app/volontari.jpg");
+export const CIVIL_SERVICE_IMAGE = require("@/assets/images/app/servizio-civile.jpg");
+export const ABOUT_IMAGE = require("@/assets/images/app/chi-siamo.png");
+export const SERVICES_IMAGE = require("@/assets/images/app/servizi.png");
 
-// Hero principale (schermata home) - ambulanza notturna La Provvidenza
-export const HERO_IMAGE =
-  localAssetUri(require("../assets/provvidenza/hero.png"));
+// Alias mantenuto per compatibilità con i componenti esistenti.
+export const LOGO_URL = LOGO_IMAGE;
 
-// I Nostri Volontari - operatrice davanti ambulanza
-export const AMBULANCE_IMAGE =
-  localAssetUri(require("../assets/provvidenza/volontari.jpg"));
-
-// Servizio Civile - logo SCU
-export const CIVIL_SERVICE_IMAGE =
-  localAssetUri(require("../assets/provvidenza/servizio-civile.png"));
-
-// Chi Siamo - sfondo gruppo associazione
-export const ABOUT_IMAGE =
-  localAssetUri(require("../assets/provvidenza/chi-siamo.png"));
-
-// Servizi - sfondo parco auto
-export const SERVICES_IMAGE =
-  localAssetUri(require("../assets/provvidenza/servizi.png"));
-
-
-// Sfondo landing sito web
-export const SITE_BG =
-  localAssetUri(require("../assets/provvidenza/sfondo-sito.png"));
-
+// Risorse web opzionali già utilizzate dalla landing.
+export const SITE_BG = "https://app.laprovvidenza.it/wp-content/uploads/sfondo-sito.png";
+export const SITE_VIDEO = "https://app.laprovvidenza.it/wp-content/uploads/video-home.mp4";

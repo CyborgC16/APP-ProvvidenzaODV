@@ -4,6 +4,11 @@
 .idea/
 .vscode/
 
+#keytool
+frontend/android/keystore.properties
+*.jks
+*.keystore
+
 # Dependencies
 node_modules/
 /node_modules
@@ -123,3 +128,27 @@ frontend/.metro-cache/
 frontend/dist/
 frontend/node_modules/
 cleanup-backup-*/
+
+# Dipendenze e compilazioni
+frontend/node_modules/
+frontend/.expo/
+frontend/.metro-cache/
+frontend/android/.gradle/
+frontend/android/app/build/
+frontend/android/build/
+backend/__pycache__/
+*.pyc
+
+# Backup locali
+*_backup*
+*.backup-*
+*.bak
+*.old
+_backup_*/
+frontend-backup-*/
+archivio-*/
+
+# File sensibili
+.env
+.env.*
+!.env.example

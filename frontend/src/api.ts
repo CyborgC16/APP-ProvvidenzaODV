@@ -1,7 +1,12 @@
 import { storage } from "@/src/utils/storage";
 
-const BASE_URL = (process.env.EXPO_PUBLIC_BACKEND_URL || "").replace(/\/$/, "");
-const REQUEST_TIMEOUT_MS = 20000;
+const RAW_BACKEND_URL =
+  process.env.EXPO_PUBLIC_BACKEND_URL ||
+  "https://app.laprovvidenza.it";
+
+const BASE_URL = RAW_BACKEND_URL.endsWith("/")
+  ? RAW_BACKEND_URL.slice(0, -1)
+  : RAW_BACKEND_URL;
 
 export type Role = "master" | "admin" | "servizio_civile";
 
@@ -166,21 +171,15 @@ async function request<T>(path: string, init?: RequestInit & { auth?: boolean })
   if (init?.auth !== false) {
     Object.assign(headers, await authHeader());
   }
-  if (!BASE_URL) {
-    throw new Error("Indirizzo del server non configurato. Ricompila l'app impostando EXPO_PUBLIC_BACKEND_URL.");
-  }
   const url = `${BASE_URL}/api${path}`;
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
   let res: Response;
   try {
-    res = await fetch(url, { ...init, headers, signal: controller.signal });
+    res = await fetch(url, { ...init, headers });
   } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    throw new Error(`Connessione al server non riuscita (${url}): ${message}`);
-  } finally {
-    clearTimeout(timeout);
+    const detail = error instanceof Error ? error.message : String(error);
+    throw new Error(`Connessione al server non riuscita (${url}): ${detail}`);
   }
+
   const text = await res.text();
   let data: any;
   try {

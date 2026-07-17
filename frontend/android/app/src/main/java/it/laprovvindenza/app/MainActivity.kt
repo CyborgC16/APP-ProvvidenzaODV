@@ -1,4 +1,4 @@
-package it.laprovvidenza.app
+package it.laprovvindenza.app
 import expo.modules.splashscreen.SplashScreenManager
 
 import android.os.Build

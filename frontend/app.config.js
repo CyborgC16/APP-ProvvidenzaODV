@@ -4,67 +4,98 @@ module.exports = {
   expo: {
     name: "La Provvidenza ODV",
     slug: "la-provvidenza-odv",
-    version: "1.2.2",
+    version: "2.0.0",
     orientation: "portrait",
     icon: "./assets/images/icon.png",
     scheme: "laprovvidenza",
     userInterfaceStyle: "automatic",
     newArchEnabled: true,
+
     ios: {
       supportsTablet: true,
-      bundleIdentifier: "it.laprovvidenza.app",
+      bundleIdentifier: "it.laprovvindenza.app",
       infoPlist: {
-        NSLocationWhenInUseUsageDescription: "Condividi la posizione con la crew durante i servizi",
-        NSLocationAlwaysAndWhenInUseUsageDescription: "Condividi la posizione anche in background con la crew",
-        NSMicrophoneUsageDescription: "Trasmetti messaggi audio sul walkie-talkie",
-        UIBackgroundModes: ["location", "audio"],
-      },
+        NSLocationWhenInUseUsageDescription:
+          "Consente di condividere la posizione mentre l’app è aperta.",
+        NSMicrophoneUsageDescription:
+          "Consente di registrare messaggi audio mentre l’app è aperta."
+      }
     },
+
     android: {
-      package: "it.laprovvidenza.app",
-      versionCode: 2,
+      package: "it.laprovvindenza.app",
+      versionCode: 5,
+      allowBackup: false,
       adaptiveIcon: {
         foregroundImage: "./assets/images/adaptive-icon.png",
-        backgroundColor: "#FDFBF7",
+        backgroundColor: "#FDFBF7"
       },
       edgeToEdgeEnabled: true,
-      softwareKeyboardLayoutMode: "resize",
-      config: googleMapsApiKey ? { googleMaps: { apiKey: googleMapsApiKey } } : {},
+      config: googleMapsApiKey
+        ? { googleMaps: { apiKey: googleMapsApiKey } }
+        : {},
+
       permissions: [
         "android.permission.ACCESS_FINE_LOCATION",
         "android.permission.ACCESS_COARSE_LOCATION",
         "android.permission.RECORD_AUDIO",
         "android.permission.MODIFY_AUDIO_SETTINGS",
+        "android.permission.POST_NOTIFICATIONS"
+      ],
+
+      blockedPermissions: [
         "android.permission.FOREGROUND_SERVICE",
         "android.permission.FOREGROUND_SERVICE_LOCATION",
         "android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK",
-        "android.permission.WAKE_LOCK",
-        "android.permission.POST_NOTIFICATIONS",
-      ],
+        "android.permission.FOREGROUND_SERVICE_MICROPHONE"
+      ]
     },
+
     web: {
       bundler: "metro",
       output: "single",
-      favicon: "./assets/images/favicon.png",
+      favicon: "./assets/images/favicon.png"
     },
+
     plugins: [
       "expo-router",
       [
         "expo-splash-screen",
         {
           image: "./assets/images/splash-image.png",
-          imageWidth: 240,
+          imageWidth: 200,
           resizeMode: "contain",
-          backgroundColor: "#FDFBF7",
-        },
+          backgroundColor: "#FDFBF7"
+        }
       ],
       "expo-font",
+      [
+        "expo-local-authentication",
+        {
+          faceIDPermission: "Consenti a La Provvidenza ODV di usare Face ID per accedere in modo sicuro."
+        }
+      ],
       "@react-native-community/datetimepicker",
-      "expo-audio",
+      [
+        "expo-audio",
+        {
+          recordAudioAndroid: true,
+          enableBackgroundPlayback: false,
+          enableBackgroundRecording: false,
+          microphonePermission:
+            "Consente a La Provvidenza ODV di registrare messaggi audio."
+        }
+      ]
     ],
-    experiments: { typedRoutes: true },
-    extra: {
-      apiBaseUrl: process.env.EXPO_PUBLIC_BACKEND_URL || "",
+
+    experiments: {
+      typedRoutes: true
     },
-  },
+
+    extra: {
+      apiBaseUrl:
+        process.env.EXPO_PUBLIC_BACKEND_URL ||
+        "https://app.laprovvidenza.it"
+    }
+  }
 };

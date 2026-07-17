@@ -46,7 +46,7 @@ export default function Home() {
       <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
         {/* Header */}
         <View style={styles.header}>
-          <Image source={{ uri: LOGO_URL }} style={styles.headerLogo} contentFit="contain" />
+          <Image source={LOGO_URL} style={styles.headerLogo} contentFit="contain" />
           <View style={{ flex: 1 }}>
             <Text style={styles.brandTitle}>La Provvidenza ODV</Text>
             <Text style={styles.brandSubtitle}>{t("app_subtitle")}</Text>
@@ -60,7 +60,7 @@ export default function Home() {
           onPress={() => router.push("/(tabs)/prenota")}
           style={({ pressed }) => [styles.hero, pressed && { opacity: 0.92 }]}
         >
-          <Image source={{ uri: HERO_IMAGE }} style={StyleSheet.absoluteFill} contentFit="cover" />
+          <Image source={HERO_IMAGE} style={StyleSheet.absoluteFill} contentFit="cover" />
           <LinearGradient
             colors={["rgba(0,0,0,0.05)", "rgba(0,0,0,0.75)"]}
             style={StyleSheet.absoluteFill}
@@ -114,7 +114,7 @@ export default function Home() {
           style={styles.fullBanner}
           testID="services-banner"
         >
-          <Image source={{ uri: SERVICES_IMAGE }} style={styles.fullBannerImage} contentFit="cover" />
+          <Image source={SERVICES_IMAGE} style={styles.fullBannerImage} contentFit="cover" />
         </Pressable>
 
         {/* Services quick cards */}
@@ -142,7 +142,7 @@ export default function Home() {
           onPress={() => router.push("/(tabs)/servizio-civile")}
           style={styles.conosciTile}
         >
-          <Image source={{ uri: CIVIL_SERVICE_IMAGE }} style={styles.scuLogo} contentFit="contain" />
+          <Image source={CIVIL_SERVICE_IMAGE} style={styles.scuLogo} contentFit="contain" />
           <View style={styles.conosciLabel}>
             <Text style={styles.conosciLabelText}>Servizio Civile</Text>
             <Ionicons name="chevron-forward" size={20} color={COLORS.white} />
@@ -153,7 +153,7 @@ export default function Home() {
           onPress={() => router.push("/(tabs)/volontari")}
           style={styles.conosciTile}
         >
-          <Image source={{ uri: AMBULANCE_IMAGE }} style={StyleSheet.absoluteFill} contentFit="cover" />
+          <Image source={AMBULANCE_IMAGE} style={StyleSheet.absoluteFill} contentFit="cover" />
           <LinearGradient colors={["transparent", "rgba(0,0,0,0.75)"]} style={StyleSheet.absoluteFill} />
           <View style={[styles.conosciLabel, { backgroundColor: "transparent" }]}>
             <Text style={[styles.conosciLabelText, { color: COLORS.white }]}>I Nostri Volontari</Text>
@@ -193,7 +193,7 @@ export default function Home() {
 
         {/* About - full screen portrait, edge-to-edge, no borders */}
         <View testID="about-card">
-          <Image source={{ uri: ABOUT_IMAGE }} style={[styles.aboutImage, { width, height }]} contentFit="cover" />
+          <Image source={ABOUT_IMAGE} style={[styles.aboutImage, { width, height }]} contentFit="cover" />
         </View>
 
         <View style={{ height: SPACING.xl }} />

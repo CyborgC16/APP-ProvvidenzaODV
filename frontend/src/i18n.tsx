@@ -51,7 +51,7 @@ const IT: Dict = {
   book_address: "Indirizzo*",
   book_weight: "Peso paziente",
   book_normo: "Normopeso",
-  book_obeso: "Obeso",
+  book_obeso: "Sovrappeso",
   book_elevator: "Ascensore in casa",
   book_yes: "Sì",
   book_no: "No",

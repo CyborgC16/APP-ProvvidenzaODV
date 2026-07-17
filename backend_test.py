@@ -169,7 +169,7 @@ def test_guest_booking_time_cutoff():
             "email": "laura.rossi@example.com",
             "address": "Via Garibaldi 5, Marsala",
             "vehicle_type": "furgone",
-            "patient_weight_class": "obeso",
+            "patient_weight_class": "sovrappeso",
             "has_elevator": False,
             "floor": 1,
             "notes": "Test time cutoff"
@@ -372,7 +372,7 @@ def test_guest_booking_capacity_furgone():
                 "email": f"furgone{i}@example.com",
                 "address": "Via Furgone, Marsala",
                 "vehicle_type": "furgone",
-                "patient_weight_class": "obeso",
+                "patient_weight_class": "sovrappeso",
                 "has_elevator": False,
                 "floor": 0,
                 "notes": f"Furgone capacity test {i+1}"
@@ -397,7 +397,7 @@ def test_guest_booking_capacity_furgone():
             "email": "furgone3@example.com",
             "address": "Via Furgone, Marsala",
             "vehicle_type": "furgone",
-            "patient_weight_class": "obeso",
+            "patient_weight_class": "sovrappeso",
             "has_elevator": False,
             "floor": 0,
             "notes": "Furgone capacity test 3 (should fail)"

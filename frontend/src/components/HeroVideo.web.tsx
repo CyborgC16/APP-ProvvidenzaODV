@@ -179,7 +179,7 @@ export default function HeroVideo() {
             style={{ display: "flex", alignItems: "center", gap: 10, cursor: "pointer" }}
             onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}
           >
-            <img src={LOGO_URL} alt="La Provvidenza ODV" style={{ width: 42, height: 42, objectFit: "contain" }} />
+            <img src={LOGO_URL as any} alt="La Provvidenza ODV" style={{ width: 42, height: 42, objectFit: "contain" }} />
             <div>
               <div style={{ color: "#fff", fontWeight: 800, fontSize: 16 }}>La Provvidenza ODV</div>
               <div style={{ color: "rgba(255,255,255,0.75)", fontSize: 11 }}>Pubblica Assistenza · Marsala</div>
