@@ -71,6 +71,24 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     void Promise.all([refresh(), refreshBiometricState()]);
   }, [refresh, refreshBiometricState]);
 
+  useEffect(() => {
+    if (!user) return;
+    let active = true;
+    const beat = async () => {
+      try {
+        if (active) await api.presenceHeartbeat();
+      } catch {
+        // Il prossimo heartbeat riproverà automaticamente.
+      }
+    };
+    void beat();
+    const timer = setInterval(() => void beat(), 30_000);
+    return () => {
+      active = false;
+      clearInterval(timer);
+    };
+  }, [user?.id]);
+
   const login = useCallback(async (username: string, password: string) => {
     const res = await api.login(username, password);
     await storage.secureSet(TOKEN_KEY, res.token);

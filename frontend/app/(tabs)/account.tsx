@@ -25,6 +25,7 @@ import { useI18n } from "@/src/i18n";
 import LangToggle from "@/src/components/LangToggle";
 import NotificationsBell from "@/src/components/NotificationsBell";
 import ManualBookingModal from "@/src/components/ManualBookingModal";
+import PresenceStatusCard from "@/src/components/PresenceStatusCard";
 import { pickImageBase64 } from "@/src/utils/picker";
 
 export default function Account() {
@@ -418,6 +419,8 @@ function AdminDashboard({
         </View>
       </View>
 
+      <PresenceStatusCard />
+
       <ScrollView
         horizontal
         showsHorizontalScrollIndicator={false}
@@ -619,6 +622,8 @@ function CivilServiceDashboard({ onLogout, fullName, onOpenSettings }: { onLogou
           </Pressable>
         </View>
       </View>
+
+      <PresenceStatusCard />
 
       <ProfileEditor visible={showProfile} onClose={() => setShowProfile(false)} onSaved={refresh} />
 

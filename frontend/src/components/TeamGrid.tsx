@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   View,
   Text,
@@ -11,6 +11,7 @@ import {
   KeyboardAvoidingView,
   Platform,
   Alert,
+  Animated,
 } from "react-native";
 import { Image } from "expo-image";
 import { Ionicons } from "@expo/vector-icons";
@@ -31,6 +32,43 @@ function isBirthday(birthDate?: string | null): boolean {
   const now = new Date();
   const bd = new Date(birthDate);
   return now.getMonth() === bd.getMonth() && now.getDate() === bd.getDate();
+}
+
+
+const PRESENCE_COLOR: Record<string, string> = {
+  disponibile: "#22C55E",
+  impegnato: "#F97316",
+  non_disponibile: "#EF4444",
+  offline: "#94A3B8",
+};
+
+const PRESENCE_LABEL: Record<string, string> = {
+  disponibile: "Disponibile",
+  impegnato: "In servizio",
+  non_disponibile: "Non disponibile",
+  offline: "Offline",
+};
+
+function PresenceAvatar({ member }: { member: TeamMember }) {
+  const scale = useRef(new Animated.Value(1)).current;
+  const status = member.presence?.status || "offline";
+  useEffect(() => {
+    Animated.sequence([
+      Animated.timing(scale, { toValue: 1.07, duration: 220, useNativeDriver: true }),
+      Animated.spring(scale, { toValue: 1, friction: 5, useNativeDriver: true }),
+    ]).start();
+  }, [status, scale]);
+  return (
+    <Animated.View style={[styles.presenceRing, { borderColor: PRESENCE_COLOR[status], transform: [{ scale }] }]}>
+      {member.photo_b64 ? (
+        <Image source={{ uri: member.photo_b64 }} style={styles.photo} contentFit="cover" />
+      ) : (
+        <View style={[styles.photo, styles.photoEmpty]}>
+          <Text style={styles.photoInitial}>{member.full_name.charAt(0)}</Text>
+        </View>
+      )}
+    </Animated.View>
+  );
 }
 
 function formatItalianDate(iso?: string | null): string | null {
@@ -147,13 +185,7 @@ export default function TeamGrid({ team, currentUser, onReload }: Props) {
               testID={`team-${m.id}`}
             >
               <View>
-                {m.photo_b64 ? (
-                  <Image source={{ uri: m.photo_b64 }} style={styles.photo} contentFit="cover" />
-                ) : (
-                  <View style={[styles.photo, styles.photoEmpty]}>
-                    <Text style={styles.photoInitial}>{m.full_name.charAt(0)}</Text>
-                  </View>
-                )}
+                <PresenceAvatar member={m} />
                 {birthday ? (
                   <View style={styles.birthdayBadge}>
                     <Text style={styles.birthdayEmoji}>🎂</Text>
@@ -168,6 +200,9 @@ export default function TeamGrid({ team, currentUser, onReload }: Props) {
                   {m.role_title}
                 </Text>
               ) : null}
+              <Text style={[styles.presenceLabel, { color: PRESENCE_COLOR[m.presence?.status || "offline"] }]}>
+                {PRESENCE_LABEL[m.presence?.status || "offline"]}
+              </Text>
             </Pressable>
           );
         })}
@@ -327,11 +362,13 @@ const styles = StyleSheet.create({
   searchInput: { flex: 1, paddingVertical: 10, fontSize: 14, color: COLORS.navy },
   grid: { flexDirection: "row", flexWrap: "wrap", gap: SPACING.md },
   photoCard: { width: "30%", alignItems: "center", marginBottom: SPACING.md },
-  photo: { width: "100%", aspectRatio: 1, borderRadius: RADIUS.md, ...SHADOW.card },
+  presenceRing: { width: 88, height: 88, borderRadius: 44, borderWidth: 4, padding: 3, ...SHADOW.card },
+  photo: { width: "100%", height: "100%", borderRadius: 40 },
   photoEmpty: { backgroundColor: COLORS.navy, alignItems: "center", justifyContent: "center" },
   photoInitial: { fontSize: 28, fontWeight: "800", color: COLORS.cream },
   photoName: { fontSize: 12, color: COLORS.navy, marginTop: SPACING.sm, fontWeight: "700", textAlign: "center" },
   photoRole: { fontSize: 10, color: COLORS.brand, fontWeight: "600", textAlign: "center", marginTop: 1 },
+  presenceLabel: { fontSize: 10, fontWeight: "800", textAlign: "center", marginTop: 2 },
   birthdayBadge: {
     position: "absolute",
     top: -6,

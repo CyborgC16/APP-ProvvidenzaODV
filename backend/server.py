@@ -336,6 +336,29 @@ class AnnouncementPublic(BaseModel):
     author_name: Optional[str] = None
 
 
+class PresenceStatusUpdate(BaseModel):
+    mode: Literal["automatico", "disponibile", "impegnato", "non_disponibile"]
+    duration_minutes: Optional[int] = Field(default=None, ge=1, le=1440)
+
+
+class PresencePublic(BaseModel):
+    user_id: str
+    full_name: str
+    role: str
+    photo_b64: Optional[str] = None
+    role_title: Optional[str] = None
+    online: bool
+    status: Literal["disponibile", "impegnato", "non_disponibile", "offline"]
+    source: str
+    last_seen_at: Optional[str] = None
+    manual_until: Optional[str] = None
+
+
+class AnnouncementReadPublic(BaseModel):
+    announcement_id: str
+    read_at: str
+
+
 class ShiftCreateRequest(BaseModel):
     date: str
     time_start: str
@@ -1514,6 +1537,173 @@ async def update_patient(patient_id: str, body: PatientCreate, user: dict = Depe
 async def delete_patient(patient_id: str, user: dict = Depends(require_role("master", "admin"))):
     await db.patients.delete_one({"id": patient_id})
     return {"ok": True}
+
+
+
+
+# ----- V2: presenza online e stato operativo -----
+PRESENCE_ONLINE_SECONDS = 90
+
+
+def _parse_iso_datetime(value: Optional[str]) -> Optional[datetime]:
+    if not value:
+        return None
+    try:
+        parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+        return parsed if parsed.tzinfo else parsed.replace(tzinfo=timezone.utc)
+    except (TypeError, ValueError):
+        return None
+
+
+async def _active_service_for_user(user_id: str) -> bool:
+    active_states = {
+        "assegnato", "in_partenza", "partenza", "dal_paziente",
+        "arrivo_assistito", "in_trasporto", "a_destinazione", "in_servizio"
+    }
+    crew = await db.crews.find_one({
+        "$or": [
+            {"driver_user_id": user_id},
+            {"member_user_ids": user_id},
+        ]
+    }, {"_id": 0, "mission_id": 1, "service_id": 1})
+    if crew:
+        entity_id = crew.get("service_id") or crew.get("mission_id")
+        if entity_id:
+            service = await db.services.find_one({"id": entity_id}, {"_id": 0, "status": 1})
+            if not service:
+                service = await db.missions.find_one({"id": entity_id}, {"_id": 0, "status": 1})
+            if service and service.get("status") in active_states:
+                return True
+    direct = await db.services.find_one({
+        "status": {"$in": list(active_states)},
+        "$or": [
+            {"driver_user_id": user_id},
+            {"member_user_ids": user_id},
+            {"crew_user_ids": user_id},
+        ],
+    }, {"_id": 0, "id": 1})
+    return direct is not None
+
+
+async def _active_shift_for_user(user_id: str, now: datetime) -> bool:
+    today = now.date().isoformat()
+    shifts = await db.shifts.find(
+        {"assigned_user_id": user_id, "date": today},
+        {"_id": 0, "time_start": 1, "time_end": 1},
+    ).to_list(50)
+    current_hm = now.astimezone().strftime("%H:%M")
+    for shift in shifts:
+        start = shift.get("time_start") or "00:00"
+        end = shift.get("time_end") or start
+        if start <= current_hm <= end:
+            return True
+    return False
+
+
+async def _presence_for_user(user_doc: dict, now: datetime) -> dict:
+    user_id = user_doc["id"]
+    presence = await db.user_presence.find_one({"user_id": user_id}, {"_id": 0}) or {}
+    last_seen = _parse_iso_datetime(presence.get("last_seen_at"))
+    online = bool(last_seen and (now - last_seen).total_seconds() <= PRESENCE_ONLINE_SECONDS)
+
+    if await _active_service_for_user(user_id):
+        status, source = "impegnato", "servizio"
+    elif await _active_shift_for_user(user_id, now):
+        status, source = "impegnato", "turno"
+    else:
+        manual_mode = presence.get("manual_mode")
+        manual_until = _parse_iso_datetime(presence.get("manual_until"))
+        manual_valid = manual_mode and manual_mode != "automatico" and (manual_until is None or manual_until > now)
+        if manual_valid:
+            status, source = manual_mode, "manuale"
+        else:
+            status, source = "disponibile", "automatico"
+            if manual_mode and manual_mode != "automatico":
+                await db.user_presence.update_one(
+                    {"user_id": user_id},
+                    {"$set": {"manual_mode": "automatico", "manual_until": None}},
+                )
+
+    visible_status = status if online else "offline"
+    return {
+        "user_id": user_id,
+        "full_name": user_doc.get("full_name", ""),
+        "role": user_doc.get("role", ""),
+        "photo_b64": user_doc.get("photo_b64"),
+        "role_title": user_doc.get("role_title"),
+        "online": online,
+        "status": visible_status,
+        "source": source,
+        "last_seen_at": presence.get("last_seen_at"),
+        "manual_until": presence.get("manual_until"),
+    }
+
+
+@api_router.post("/presence/heartbeat")
+async def presence_heartbeat(user: dict = Depends(get_current_user)):
+    now = datetime.now(timezone.utc).isoformat()
+    await db.user_presence.update_one(
+        {"user_id": user["id"]},
+        {"$set": {"last_seen_at": now, "updated_at": now}, "$setOnInsert": {"manual_mode": "automatico"}},
+        upsert=True,
+    )
+    return {"ok": True, "last_seen_at": now}
+
+
+@api_router.get("/presence/me", response_model=PresencePublic)
+async def my_presence(user: dict = Depends(get_current_user)):
+    return PresencePublic(**(await _presence_for_user(user, datetime.now(timezone.utc))))
+
+
+@api_router.patch("/presence/me", response_model=PresencePublic)
+async def update_my_presence(body: PresenceStatusUpdate, user: dict = Depends(get_current_user)):
+    now = datetime.now(timezone.utc)
+    manual_until = None
+    if body.mode != "automatico" and body.duration_minutes:
+        manual_until = (now + timedelta(minutes=body.duration_minutes)).isoformat()
+    await db.user_presence.update_one(
+        {"user_id": user["id"]},
+        {"$set": {
+            "manual_mode": body.mode,
+            "manual_until": manual_until,
+            "updated_at": now.isoformat(),
+            "last_seen_at": now.isoformat(),
+        }},
+        upsert=True,
+    )
+    return PresencePublic(**(await _presence_for_user(user, now)))
+
+
+@api_router.get("/presence/team", response_model=List[PresencePublic])
+async def team_presence(user: dict = Depends(get_current_user)):
+    users = await db.users.find(
+        {"role": {"$in": ["master", "admin", "servizio_civile"]}},
+        {"_id": 0, "password_hash": 0},
+    ).sort([("full_name", 1)]).to_list(500)
+    now = datetime.now(timezone.utc)
+    return [PresencePublic(**(await _presence_for_user(item, now))) for item in users]
+
+
+@api_router.post("/announcements/{ann_id}/read", response_model=AnnouncementReadPublic)
+async def mark_announcement_read(ann_id: str, user: dict = Depends(get_current_user)):
+    exists = await db.announcements.find_one({"id": ann_id}, {"_id": 0, "id": 1})
+    if not exists:
+        raise HTTPException(status_code=404, detail="Avviso non trovato")
+    now = datetime.now(timezone.utc).isoformat()
+    await db.announcement_reads.update_one(
+        {"announcement_id": ann_id, "user_id": user["id"]},
+        {"$set": {"read_at": now}},
+        upsert=True,
+    )
+    return AnnouncementReadPublic(announcement_id=ann_id, read_at=now)
+
+
+@api_router.get("/announcements/read-ids", response_model=List[str])
+async def announcement_read_ids(user: dict = Depends(get_current_user)):
+    docs = await db.announcement_reads.find(
+        {"user_id": user["id"]}, {"_id": 0, "announcement_id": 1}
+    ).to_list(1000)
+    return [item["announcement_id"] for item in docs]
 
 
 # ----- Team members (public read for Volontari / Servizio Civile pages) -----

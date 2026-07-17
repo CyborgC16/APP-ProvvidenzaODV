@@ -20,14 +20,23 @@ export default function Volontari() {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      setTeam(await api.team("admin"));
+      const [volunteers, civic, presence] = await Promise.all([
+        api.team("admin"),
+        api.team("servizio_civile"),
+        api.teamPresence(),
+      ]);
+      const byId = new Map(presence.map((item) => [item.user_id, item]));
+      const members = [...volunteers, ...civic].sort((a, b) => a.full_name.localeCompare(b.full_name));
+      setTeam(members.map((member) => ({ ...member, presence: byId.get(member.id) })));
     } finally {
       setLoading(false);
     }
   }, []);
 
   useEffect(() => {
-    load();
+    void load();
+    const timer = setInterval(() => void load(), 30_000);
+    return () => clearInterval(timer);
   }, [load]);
 
   return (

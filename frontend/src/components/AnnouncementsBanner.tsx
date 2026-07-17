@@ -9,6 +9,7 @@ import { useAuth } from "@/src/auth";
 export default function AnnouncementsBanner() {
   const { user } = useAuth();
   const [items, setItems] = useState<Announcement[]>([]);
+  const [readIds, setReadIds] = useState<string[]>([]);
   const [selected, setSelected] = useState<Announcement | null>(null);
 
   const load = useCallback(async () => {
@@ -17,8 +18,12 @@ export default function AnnouncementsBanner() {
       return;
     }
     try {
-      const list = await api.listAnnouncements();
+      const [list, reads] = await Promise.all([
+        api.listAnnouncements(),
+        api.announcementReadIds(),
+      ]);
       setItems(list);
+      setReadIds(reads);
     } catch {
       setItems([]);
     }
@@ -52,7 +57,11 @@ export default function AnnouncementsBanner() {
               <Text style={[styles.title, { color: c.tint }]} numberOfLines={1}>{a.title}</Text>
               <Text style={styles.msg} numberOfLines={1}>{a.message}</Text>
             </View>
-            <Ionicons name="chevron-forward" size={20} color={c.tint} />
+            {readIds.includes(a.id) ? (
+              <Ionicons name="checkmark-circle" size={20} color={c.tint} />
+            ) : (
+              <View style={[styles.unreadDot, { backgroundColor: c.tint }]} />
+            )}
           </Pressable>
         );
       })}
@@ -76,11 +85,21 @@ export default function AnnouncementsBanner() {
                   {new Date(selected.expires_at).toLocaleDateString("it-IT")}
                 </Text>
                 <Pressable
-                  onPress={() => setSelected(null)}
+                  onPress={async () => {
+                    if (!readIds.includes(selected.id)) {
+                      try {
+                        await api.markAnnouncementRead(selected.id);
+                        setReadIds((current) => [...current, selected.id]);
+                      } catch {}
+                    }
+                    setSelected(null);
+                  }}
                   style={styles.closeBtn}
                   testID="close-announcement"
                 >
-                  <Text style={styles.closeBtnText}>Chiudi</Text>
+                  <Text style={styles.closeBtnText}>
+                    {readIds.includes(selected.id) ? "Chiudi" : "Conferma lettura"}
+                  </Text>
                 </Pressable>
               </ScrollView>
             ) : null}
@@ -112,4 +131,5 @@ const styles = StyleSheet.create({
   modalMeta: { fontSize: 11, color: COLORS.onSurfaceMuted, marginTop: SPACING.lg, fontStyle: "italic" },
   closeBtn: { backgroundColor: COLORS.brand, borderRadius: RADIUS.pill, paddingVertical: 12, alignItems: "center", marginTop: SPACING.md },
   closeBtnText: { color: COLORS.white, fontWeight: "700" },
+  unreadDot: { width: 10, height: 10, borderRadius: 5 },
 });

@@ -25,6 +25,7 @@ export type UserPublic = {
   join_date?: string | null;
   birth_date?: string | null;
   notify_email?: boolean;
+  presence_status?: PresenceStatus;
 };
 
 export type Shift = {
@@ -64,6 +65,21 @@ export type Patient = PatientInput & {
   created_at: string;
 };
 
+export type PresenceStatus = "disponibile" | "impegnato" | "non_disponibile" | "offline";
+
+export type PresenceItem = {
+  user_id: string;
+  full_name: string;
+  role: string;
+  photo_b64?: string | null;
+  role_title?: string | null;
+  online: boolean;
+  status: PresenceStatus;
+  source: string;
+  last_seen_at?: string | null;
+  manual_until?: string | null;
+};
+
 export type TeamMember = {
   id: string;
   full_name: string;
@@ -74,6 +90,7 @@ export type TeamMember = {
   role_title?: string | null;
   join_date?: string | null;
   birth_date?: string | null;
+  presence?: PresenceItem;
 };
 
 export type Announcement = {
@@ -206,6 +223,21 @@ export const api = {
   async me() {
     return request<UserPublic>("/auth/me");
   },
+  async presenceHeartbeat() {
+    return request<{ ok: boolean; last_seen_at: string }>("/presence/heartbeat", { method: "POST" });
+  },
+  async myPresence() {
+    return request<PresenceItem>("/presence/me");
+  },
+  async updateMyPresence(mode: "automatico" | "disponibile" | "impegnato" | "non_disponibile", duration_minutes?: number) {
+    return request<PresenceItem>("/presence/me", {
+      method: "PATCH",
+      body: JSON.stringify({ mode, duration_minutes }),
+    });
+  },
+  async teamPresence() {
+    return request<PresenceItem[]>("/presence/team");
+  },
   async changePassword(current_password: string, new_password: string) {
     return request<{ ok: boolean }>("/auth/change-password", {
       method: "POST",
@@ -237,6 +269,12 @@ export const api = {
   },
   async deleteAnnouncement(id: string) {
     return request<{ ok: boolean }>(`/announcements/${id}`, { method: "DELETE" });
+  },
+  async markAnnouncementRead(id: string) {
+    return request<{ announcement_id: string; read_at: string }>(`/announcements/${id}/read`, { method: "POST" });
+  },
+  async announcementReadIds() {
+    return request<string[]>("/announcements/read-ids");
   },
 
   // Shifts
