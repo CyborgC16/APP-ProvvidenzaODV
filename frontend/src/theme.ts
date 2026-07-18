@@ -1,9 +1,9 @@
 import { Platform } from "react-native";
 
 export const COLORS = {
-  surface: "#FDFBF7",
+  surface: "#F7F8FA",
   surfaceSecondary: "#FFFFFF",
-  surfaceTertiary: "#F2EFE9",
+  surfaceTertiary: "#EEF1F5",
   surfaceInverse: "#121A26",
   onSurface: "#121A26",
   onSurfaceInverse: "#FDFBF7",
@@ -17,9 +17,9 @@ export const COLORS = {
   success: "#198754",
   warning: "#FFC107",
   error: "#DC3545",
-  border: "#E5E0D8",
+  border: "#E3E7EC",
   borderStrong: "#CCC4B5",
-  divider: "#E5E0D8",
+  divider: "#E3E7EC",
   white: "#FFFFFF",
   black: "#000000",
   overlay: "rgba(0,0,0,0.5)",
@@ -55,6 +55,13 @@ export const SHADOW = {
     shadowOpacity: 0.08,
     shadowRadius: 8,
     elevation: 3,
+  },
+  floating: {
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.14,
+    shadowRadius: 18,
+    elevation: 10,
   },
   fab: {
     shadowColor: "#000",
