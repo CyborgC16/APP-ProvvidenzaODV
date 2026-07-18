@@ -1,4 +1,4 @@
-import { ScrollView, View, Text, StyleSheet, Pressable, Linking, FlatList, useWindowDimensions } from "react-native";
+import { Animated, View, Text, StyleSheet, Pressable, Linking, FlatList, useWindowDimensions } from "react-native";
 import { Image } from "expo-image";
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "expo-router";
@@ -14,6 +14,7 @@ import { api, GalleryPhoto } from "@/src/api";
 
 const INSTAGRAM_URL = "https://www.instagram.com/la_provvidenza_anpas/";
 const ASSOCIATION_PHONE = "+393203920933";
+const AnimatedImage = Animated.createAnimatedComponent(Image);
 
 export default function Home() {
   const router = useRouter();
@@ -22,6 +23,7 @@ export default function Home() {
   const [photos, setPhotos] = useState<GalleryPhoto[]>([]);
   const listRef = useRef<FlatList<GalleryPhoto>>(null);
   const indexRef = useRef(0);
+  const scrollY = useRef(new Animated.Value(0)).current;
   const contentWidth = Math.min(width, 1180);
   const galleryWidth = Math.min(width - 32, 760);
 
@@ -35,6 +37,33 @@ export default function Home() {
     return () => clearInterval(timer);
   }, [photos.length]);
 
+
+  const heroImageTranslateY = scrollY.interpolate({
+    inputRange: [0, 420],
+    outputRange: [0, 105],
+    extrapolate: "clamp",
+  });
+  const heroImageScale = scrollY.interpolate({
+    inputRange: [0, 420],
+    outputRange: [1.08, 1.22],
+    extrapolate: "clamp",
+  });
+  const heroContentTranslateY = scrollY.interpolate({
+    inputRange: [0, 280],
+    outputRange: [0, -34],
+    extrapolate: "clamp",
+  });
+  const heroContentOpacity = scrollY.interpolate({
+    inputRange: [0, 220, 380],
+    outputRange: [1, 0.94, 0.35],
+    extrapolate: "clamp",
+  });
+  const headerTranslateY = scrollY.interpolate({
+    inputRange: [0, 90],
+    outputRange: [0, -8],
+    extrapolate: "clamp",
+  });
+
   const actions = [
     { title: "Prenota un trasporto", subtitle: "Richiedi un servizio in pochi passaggi", icon: "calendar-outline" as const, onPress: () => router.push("/(tabs)/prenota") },
     { title: "I nostri volontari", subtitle: "Scopri la squadra", icon: "people-outline" as const, onPress: () => router.push("/(tabs)/volontari") },
@@ -43,25 +72,36 @@ export default function Home() {
 
   return (
     <SafeAreaView style={styles.safe} edges={["top"]} testID="home-screen">
-      <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
+      <Animated.ScrollView
+        contentContainerStyle={styles.scroll}
+        showsVerticalScrollIndicator={false}
+        scrollEventThrottle={16}
+        onScroll={Animated.event([{ nativeEvent: { contentOffset: { y: scrollY } } }], { useNativeDriver: true })}
+      >
         <View style={[styles.container, { width: contentWidth }]}> 
-          <View style={styles.header}>
+          <Animated.View style={[styles.header, { transform: [{ translateY: headerTranslateY }] }]}>
             <View style={styles.brandWrap}>
               <Image source={LOGO_URL} style={styles.logo} contentFit="contain" />
               <View style={{ flex: 1 }}><Text style={styles.brand}>La Provvidenza</Text><Text style={styles.subtitle}>Organizzazione di Volontariato</Text></View>
             </View>
             <LangToggle />
-          </View>
+          </Animated.View>
 
           <Pressable onPress={() => router.push("/(tabs)/prenota")} style={({ pressed }) => [styles.hero, pressed && styles.pressed]}>
-            <Image source={HERO_IMAGE} style={StyleSheet.absoluteFill} contentFit="cover" />
+            <AnimatedImage
+              source={HERO_IMAGE}
+              style={[StyleSheet.absoluteFill, { transform: [{ translateY: heroImageTranslateY }, { scale: heroImageScale }] }]}
+              contentFit="cover"
+            />
             <LinearGradient colors={["rgba(10,24,42,0.05)", "rgba(10,24,42,0.88)"]} style={StyleSheet.absoluteFill} />
-            <View style={styles.heroContent}>
+            <Animated.View style={[styles.heroContent, { opacity: heroContentOpacity, transform: [{ translateY: heroContentTranslateY }] }]}>
               <View style={styles.badge}><Ionicons name="shield-checkmark" size={14} color={COLORS.brand} /><Text style={styles.badgeText}>AL SERVIZIO DELLA COMUNITÀ</Text></View>
               <Text style={styles.heroTitle}>Vicini alle persone, ogni giorno.</Text>
               <Text style={styles.heroSub}>Trasporto sanitario, assistenza e volontariato con professionalità e umanità.</Text>
               <View style={styles.primaryButton}><Text style={styles.primaryButtonText}>Prenota un servizio</Text><Ionicons name="arrow-forward" size={19} color={COLORS.white} /></View>
-            </View>
+            </Animated.View>
+            <View style={styles.heroGlowOne} />
+            <View style={styles.heroGlowTwo} />
           </Pressable>
 
           <View style={styles.contactRow}>
@@ -84,7 +124,7 @@ export default function Home() {
 
           {photos.length > 0 && <View><View style={styles.sectionHeader}><View><Text style={styles.kicker}>DALLE NOSTRE ATTIVITÀ</Text><Text style={styles.sectionTitle}>{t("section_gallery")}</Text></View></View><FlatList ref={listRef} data={photos} horizontal pagingEnabled showsHorizontalScrollIndicator={false} keyExtractor={(p) => p.id} snapToInterval={galleryWidth + 12} decelerationRate="fast" renderItem={({ item }) => <View style={[styles.gallery, { width: galleryWidth }]}><Image source={{ uri: item.photo_b64 }} style={StyleSheet.absoluteFill} contentFit="cover" />{item.caption ? <LinearGradient colors={["transparent", "rgba(0,0,0,.78)"]} style={StyleSheet.absoluteFill} /> : null}{item.caption ? <Text style={styles.galleryCaption}>{item.caption}</Text> : null}</View>} getItemLayout={(_, i) => ({ length: galleryWidth + 12, offset: (galleryWidth + 12) * i, index: i })} ItemSeparatorComponent={() => <View style={{ width: 12 }} />} /></View>}
         </View>
-      </ScrollView>
+      </Animated.ScrollView>
     </SafeAreaView>
   );
 }
@@ -92,7 +132,9 @@ export default function Home() {
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: COLORS.surface }, scroll: { paddingBottom: 110 }, container: { alignSelf: "center", paddingHorizontal: 16 },
   header: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingVertical: 14 }, brandWrap: { flexDirection: "row", alignItems: "center", flex: 1, gap: 11 }, logo: { width: 48, height: 48 }, brand: { fontSize: 20, fontWeight: "900", color: COLORS.navy, letterSpacing: -.4 }, subtitle: { fontSize: 11.5, color: COLORS.onSurfaceMuted, marginTop: 1 },
-  hero: { minHeight: 390, borderRadius: 28, overflow: "hidden", justifyContent: "flex-end", ...SHADOW.floating }, heroContent: { padding: 24, maxWidth: 610 }, badge: { alignSelf: "flex-start", flexDirection: "row", alignItems: "center", gap: 6, backgroundColor: "rgba(255,255,255,.94)", paddingHorizontal: 10, paddingVertical: 7, borderRadius: RADIUS.pill }, badgeText: { color: COLORS.navy, fontSize: 10, fontWeight: "900", letterSpacing: .8 }, heroTitle: { color: COLORS.white, fontSize: 34, lineHeight: 39, fontWeight: "900", marginTop: 14, letterSpacing: -.8 }, heroSub: { color: "rgba(255,255,255,.88)", fontSize: 15, lineHeight: 22, marginTop: 8 }, primaryButton: { alignSelf: "flex-start", flexDirection: "row", alignItems: "center", gap: 10, backgroundColor: COLORS.brand, paddingHorizontal: 18, paddingVertical: 13, borderRadius: RADIUS.pill, marginTop: 18 }, primaryButtonText: { color: COLORS.white, fontSize: 14, fontWeight: "900" },
+  hero: { minHeight: 430, borderRadius: 30, overflow: "hidden", justifyContent: "flex-end", backgroundColor: COLORS.navyDark, ...SHADOW.floating }, heroContent: { padding: 28, maxWidth: 650, zIndex: 3 }, badge: { alignSelf: "flex-start", flexDirection: "row", alignItems: "center", gap: 6, backgroundColor: "rgba(255,255,255,.94)", paddingHorizontal: 10, paddingVertical: 7, borderRadius: RADIUS.pill }, badgeText: { color: COLORS.navy, fontSize: 10, fontWeight: "900", letterSpacing: .8 }, heroTitle: { color: COLORS.white, fontSize: 34, lineHeight: 39, fontWeight: "900", marginTop: 14, letterSpacing: -.8 }, heroSub: { color: "rgba(255,255,255,.88)", fontSize: 15, lineHeight: 22, marginTop: 8 }, primaryButton: { alignSelf: "flex-start", flexDirection: "row", alignItems: "center", gap: 10, backgroundColor: COLORS.brand, paddingHorizontal: 18, paddingVertical: 13, borderRadius: RADIUS.pill, marginTop: 18 }, primaryButtonText: { color: COLORS.white, fontSize: 14, fontWeight: "900" },
+  heroGlowOne: { position: "absolute", width: 180, height: 180, borderRadius: 90, backgroundColor: "rgba(255,107,0,.18)", top: -65, right: -40, zIndex: 2 },
+  heroGlowTwo: { position: "absolute", width: 110, height: 110, borderRadius: 55, backgroundColor: "rgba(255,255,255,.10)", bottom: 34, right: 28, zIndex: 2 },
   contactRow: { flexDirection: "row", gap: 12, marginTop: 14 }, contactButton: { flex: 1, minHeight: 72, borderRadius: 18, paddingHorizontal: 16, flexDirection: "row", alignItems: "center", gap: 11 }, emergency: { backgroundColor: COLORS.error }, callUs: { backgroundColor: COLORS.white, borderWidth: 1, borderColor: COLORS.border, ...SHADOW.card }, contactSmall: { color: "rgba(255,255,255,.8)", fontSize: 9, fontWeight: "800", letterSpacing: .8 }, contactStrong: { color: COLORS.white, fontSize: 14, fontWeight: "900", marginTop: 2 },
   sectionHeader: { marginTop: 30, marginBottom: 14 }, kicker: { color: COLORS.brand, fontWeight: "900", fontSize: 10, letterSpacing: 1.2 }, sectionTitle: { color: COLORS.navy, fontWeight: "900", fontSize: 24, letterSpacing: -.5, marginTop: 3 }, actionGrid: { flexDirection: "row", flexWrap: "wrap", gap: 12 }, actionCard: { flexGrow: 1, flexBasis: 210, minHeight: 172, backgroundColor: COLORS.white, borderRadius: 20, borderWidth: 1, borderColor: COLORS.border, padding: 18, ...SHADOW.card }, actionIcon: { width: 48, height: 48, borderRadius: 15, backgroundColor: COLORS.brandLight, alignItems: "center", justifyContent: "center" }, actionTitle: { color: COLORS.navy, fontWeight: "900", fontSize: 16, marginTop: 16 }, actionSub: { color: COLORS.onSurfaceMuted, fontSize: 12.5, lineHeight: 18, marginTop: 4, paddingRight: 30 }, actionArrow: { position: "absolute", right: 16, bottom: 16 },
   featureRow: { flexDirection: "row", flexWrap: "wrap", gap: 12 }, featureCard: { flexGrow: 1, flexBasis: 280, height: 250, borderRadius: 22, overflow: "hidden", justifyContent: "flex-end", ...SHADOW.card }, featureLabel: { padding: 20 }, featureTitle: { color: COLORS.white, fontSize: 22, fontWeight: "900" }, featureSub: { color: "rgba(255,255,255,.82)", fontSize: 13, marginTop: 3 },
