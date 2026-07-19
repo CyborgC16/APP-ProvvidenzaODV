@@ -22,7 +22,7 @@ from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from pathlib import Path
 from datetime import datetime, timezone, timedelta
-from typing import List, Optional, Literal
+from typing import List, Optional, Literal, Any
 
 import bcrypt
 import jwt
@@ -304,6 +304,117 @@ async def _assistant_my_shifts(user_id: str, date_from: Optional[str] = None) ->
     return await db.shifts.find(query, {"_id": 0}).sort([("date", 1), ("time_start", 1)]).to_list(50)
 
 
+ASSISTANT_SESSION_MINUTES = 20
+
+def _assistant_parse_date(text: str) -> Optional[str]:
+    normalized = text.lower().strip()
+    today = datetime.now(ROME_TZ).date()
+    if "dopodomani" in normalized:
+        return (today + timedelta(days=2)).isoformat()
+    if "domani" in normalized:
+        return (today + timedelta(days=1)).isoformat()
+    if "oggi" in normalized:
+        return today.isoformat()
+    match = re.search(r"\b(\d{1,2})[/-](\d{1,2})(?:[/-](\d{2,4}))?\b", normalized)
+    if match:
+        day, month, year = int(match.group(1)), int(match.group(2)), match.group(3)
+        year_num = today.year if not year else int(year) + (2000 if len(year) == 2 else 0)
+        try:
+            return datetime(year_num, month, day).date().isoformat()
+        except ValueError:
+            return None
+    iso = re.search(r"\b(20\d{2})-(\d{2})-(\d{2})\b", normalized)
+    if iso:
+        try:
+            return datetime.strptime(iso.group(0), "%Y-%m-%d").date().isoformat()
+        except ValueError:
+            return None
+    return None
+
+def _assistant_parse_time(text: str) -> Optional[str]:
+    normalized = text.lower().replace('.', ':')
+    explicit = re.search(r"(?:alle|ore|verso)\s*(\d{1,2})(?::(\d{2}))?\b", normalized)
+    candidates = [explicit] if explicit else list(re.finditer(r"\b(\d{1,2}):(\d{2})\b", normalized))
+    for match in candidates:
+        if not match:
+            continue
+        hour = int(match.group(1)); minute = int(match.group(2) or 0)
+        if 0 <= hour <= 23 and 0 <= minute <= 59:
+            return f"{hour:02d}:{minute:02d}"
+    stripped = normalized.strip()
+    if re.fullmatch(r"\d{1,2}", stripped):
+        hour = int(stripped)
+        if 0 <= hour <= 23:
+            return f"{hour:02d}:00"
+    return None
+
+def _assistant_parse_vehicle(text: str) -> Optional[str]:
+    normalized = text.lower()
+    if "ambulanza" in normalized:
+        return "ambulanza"
+    if any(word in normalized for word in ("auto", "macchina", "furgone")):
+        return "furgone"
+    return None
+
+def _assistant_is_create(text: str) -> bool:
+    normalized = text.lower()
+    return any(word in normalized for word in ("aggiungi", "crea", "prenota", "blocca")) and any(word in normalized for word in ("servizio", "slot", "trasporto", "ambulanza", "auto", "furgone"))
+
+def _assistant_is_confirm(text: str) -> bool:
+    return text.lower().strip() in {"confermo", "conferma", "sì", "si", "ok", "procedi", "va bene"}
+
+def _assistant_is_cancel(text: str) -> bool:
+    return text.lower().strip() in {"annulla", "annullo", "cancella", "lascia perdere", "stop"}
+
+async def _assistant_get_session(user_id: str) -> Optional[dict]:
+    doc = await db.assistant_sessions.find_one({"user_id": user_id}, {"_id": 0})
+    if not doc:
+        return None
+    expires_at = doc.get("expires_at")
+    if expires_at:
+        try:
+            if datetime.fromisoformat(expires_at) < datetime.now(timezone.utc):
+                await db.assistant_sessions.delete_one({"user_id": user_id})
+                return None
+        except ValueError:
+            pass
+    return doc
+
+async def _assistant_save_session(user_id: str, state: dict) -> None:
+    now = datetime.now(timezone.utc)
+    state.update({"user_id": user_id, "updated_at": now.isoformat(), "expires_at": (now + timedelta(minutes=ASSISTANT_SESSION_MINUTES)).isoformat()})
+    await db.assistant_sessions.update_one({"user_id": user_id}, {"$set": state}, upsert=True)
+
+async def _assistant_clear_session(user_id: str) -> None:
+    await db.assistant_sessions.delete_one({"user_id": user_id})
+
+def _assistant_summary(data: dict) -> str:
+    vehicle = "Ambulanza" if data.get("vehicle_type") == "ambulanza" else "Auto/Furgone"
+    patient = data.get("patient_name") or "Non indicato"
+    address = data.get("address") or "Non indicata"
+    return (f"Riepilogo del servizio:\n• Data: {data.get('date')}\n• Ora: {data.get('time')}\n"
+            f"• Mezzo: {vehicle}\n• Paziente: {patient}\n• Destinazione/indirizzo: {address}\n\nConfermi?")
+
+async def _assistant_create_manual_booking(data: dict, user: dict) -> dict:
+    validate_booking_day_time(data["date"], data["time"])
+    booked = await count_active_bookings(data["date"], data["vehicle_type"])
+    capacity = DAILY_CAPACITY[data["vehicle_type"]]
+    if booked >= capacity:
+        raise HTTPException(status_code=409, detail="Nessuno slot disponibile per questo mezzo, giorno e orario")
+    now = datetime.now(timezone.utc).isoformat()
+    booking_doc = {
+        "id": str(uuid.uuid4()), "slot_date": data["date"], "slot_time": data["time"],
+        "requester_name": user.get("full_name") or user.get("username") or "Operatore",
+        "requester_surname": None, "patient_name": data.get("patient_name"), "patient_surname": None,
+        "phone": None, "email": user.get("email"), "address": data.get("address"),
+        "vehicle_type": data["vehicle_type"], "patient_weight_class": None, "has_elevator": None,
+        "floor": None, "notes": "Creato tramite Assistente Provvidenza", "source": "assistant",
+        "status": "pendente", "created_at": now, "created_by": user["id"],
+    }
+    await db.bookings.insert_one(booking_doc)
+    return {k: v for k, v in booking_doc.items() if k != "_id"}
+
+
 # ===== Models =====
 class UserPublic(BaseModel):
     id: str
@@ -449,6 +560,9 @@ class AssistantChatResponse(BaseModel):
     intent: str
     source: Literal["local", "gemini"]
     suggestions: List[str] = Field(default_factory=list)
+    phase: Optional[str] = None
+    requires_confirmation: bool = False
+    created_booking_id: Optional[str] = None
 
 
 class ShiftCreateRequest(BaseModel):
@@ -1573,71 +1687,101 @@ async def delete_shift(shift_id: str, user: dict = Depends(require_role("master"
     return {"ok": True}
 
 
-# ----- Assistente Provvidenza (prima fase: sola lettura) -----
+# ----- Assistente Provvidenza: lettura + creazione guidata -----
 @api_router.post("/assistant/chat", response_model=AssistantChatResponse)
 async def assistant_chat(body: AssistantChatRequest, user: dict = Depends(get_current_user)):
-    local_intent = _assistant_local_intent(body.message)
-    gemini_intent = await asyncio.to_thread(_gemini_classify_sync, body.message, [m.model_dump() for m in body.history])
-    intent = gemini_intent or local_intent
-    source = "gemini" if gemini_intent else "local"
-    target_date = _assistant_target_date(body.message)
-    today = datetime.now(ROME_TZ).date().isoformat()
+    text = body.message.strip()
+    local_intent = _assistant_local_intent(text)
+    session = await _assistant_get_session(user["id"])
+    source = "local"
+    suggestions = ["Aggiungi un servizio", "Che turno faccio domani?", "Quale mezzo ho assegnato?"]
+    phase = session.get("phase") if session else None
+    created_booking_id = None
 
-    if intent in {"my_shift", "my_vehicle", "my_patient"}:
-        shifts = await _assistant_my_shifts(user["id"])
-        day_shifts = [shift for shift in shifts if shift.get("date") == target_date]
-        if not day_shifts:
-            label = "domani" if target_date != today else "oggi"
-            reply = f"Non risultano turni assegnati per {label}."
-        else:
-            shift = day_shifts[0]
-            time_text = shift.get("time_start") or "orario non indicato"
-            if intent == "my_vehicle":
-                vehicle = shift.get("vehicle") or "nessun mezzo ancora assegnato"
-                reply = f"Per il turno del {target_date} alle {time_text} risulta: {vehicle}."
-            elif intent == "my_patient":
-                patient = shift.get("patient_name") or "nessun paziente ancora indicato"
-                reply = f"Per il turno del {target_date} alle {time_text} risulta: {patient}."
-            else:
-                end = f"–{shift.get('time_end')}" if shift.get("time_end") else ""
-                vehicle = f", mezzo {shift.get('vehicle')}" if shift.get("vehicle") else ""
-                reply = f"Il tuo turno è il {target_date} dalle {time_text}{end}{vehicle}."
-    elif intent == "next_service":
-        shifts = await _assistant_my_shifts(user["id"], today)
-        if not shifts:
-            reply = "Non risultano prossimi Servizi assegnati."
-        else:
-            shift = shifts[0]
-            vehicle = f" con {shift.get('vehicle')}" if shift.get("vehicle") else ""
-            reply = f"Il prossimo Servizio è il {shift.get('date')} alle {shift.get('time_start')}{vehicle}."
-    elif intent == "service_count":
-        query = {"date": target_date}
+    if _assistant_is_cancel(text) and session:
+        await _assistant_clear_session(user["id"])
+        reply, intent, phase = "Operazione annullata. Non è stato creato alcun servizio.", "create_service", "cancelled"
+    elif session and session.get("intent") == "create_service":
         if user.get("role") not in ("master", "admin"):
-            query["assigned_user_id"] = user["id"]
-        count = await db.shifts.count_documents(query)
-        scope = "assegnati a te" if user.get("role") not in ("master", "admin") else "registrati"
-        reply = f"Per il {target_date} risultano {count} Servizi {scope}."
+            await _assistant_clear_session(user["id"])
+            raise HTTPException(status_code=403, detail="Solo master e volontari autorizzati possono creare Servizi")
+        data = session.get("data", {})
+        current = session.get("phase")
+        if current == "ask_date":
+            value = _assistant_parse_date(text)
+            if not value:
+                reply, intent, phase = "Indica il giorno, ad esempio ‘domani’ oppure ‘25/07’.", "create_service", current
+            else:
+                data["date"] = value; phase = "ask_time"; reply, intent = "A che ora devo bloccare lo slot?", "create_service"
+        elif current == "ask_time":
+            value = _assistant_parse_time(text)
+            if not value:
+                reply, intent, phase = "Indica un orario preciso, ad esempio ‘alle 15:30’.", "create_service", current
+            else:
+                data["time"] = value; phase = "ask_vehicle"; reply, intent = "Auto/furgone o ambulanza?", "create_service"
+        elif current == "ask_vehicle":
+            value = _assistant_parse_vehicle(text)
+            if not value:
+                reply, intent, phase = "Scegli ‘ambulanza’ oppure ‘auto/furgone’.", "create_service", current
+            else:
+                data["vehicle_type"] = value; phase = "ask_patient"; reply, intent = "Qual è il nome del paziente? Scrivi ‘salta’ se non vuoi indicarlo ora.", "create_service"
+        elif current == "ask_patient":
+            data["patient_name"] = None if text.lower() in {"salta", "non indicato", "nessuno"} else text
+            phase = "ask_address"; reply, intent = "Qual è la destinazione o l’indirizzo? Scrivi ‘salta’ se non vuoi indicarlo ora.", "create_service"
+        elif current == "ask_address":
+            data["address"] = None if text.lower() in {"salta", "non indicata", "nessuno"} else text
+            phase = "confirm"; reply, intent = _assistant_summary(data), "create_service"
+        elif current == "confirm":
+            if _assistant_is_confirm(text):
+                booking = await _assistant_create_manual_booking(data, user)
+                created_booking_id = booking["id"]
+                await _assistant_clear_session(user["id"]); phase = "completed"; intent = "create_service"
+                reply = f"Servizio creato e slot bloccato per il {booking['slot_date']} alle {booking['slot_time']}."
+            else:
+                reply, intent, phase = "Scrivi ‘confermo’ per creare il servizio oppure ‘annulla’ per interrompere.", "create_service", current
+        else:
+            await _assistant_clear_session(user["id"]); reply, intent, phase = "La sessione è stata azzerata. Scrivi ‘aggiungi un servizio’ per ricominciare.", "create_service", "cancelled"
+        if phase not in {"completed", "cancelled"}:
+            await _assistant_save_session(user["id"], {"intent": "create_service", "phase": phase, "data": data})
+    elif _assistant_is_create(text):
+        if user.get("role") not in ("master", "admin"):
+            raise HTTPException(status_code=403, detail="Solo master e volontari autorizzati possono creare Servizi")
+        data: dict[str, Any] = {}
+        date_value = _assistant_parse_date(text); time_value = _assistant_parse_time(text); vehicle_value = _assistant_parse_vehicle(text)
+        if date_value: data["date"] = date_value
+        if time_value: data["time"] = time_value
+        if vehicle_value: data["vehicle_type"] = vehicle_value
+        if not data.get("date"): phase, reply = "ask_date", "Per quale giorno?"
+        elif not data.get("time"): phase, reply = "ask_time", "A che ora devo bloccare lo slot?"
+        elif not data.get("vehicle_type"): phase, reply = "ask_vehicle", "Auto/furgone o ambulanza?"
+        else: phase, reply = "ask_patient", "Qual è il nome del paziente? Scrivi ‘salta’ se non vuoi indicarlo ora."
+        intent = "create_service"
+        await _assistant_save_session(user["id"], {"intent": intent, "phase": phase, "data": data})
     else:
-        reply = (
-            "Posso dirti il tuo prossimo turno, il mezzo o il paziente assegnato e quanti Servizi sono previsti. "
-            "La creazione vocale dei Servizi verrà attivata nella fase successiva con riepilogo e conferma obbligatoria."
-        )
+        gemini_intent = await asyncio.to_thread(_gemini_classify_sync, text, [m.model_dump() for m in body.history])
+        intent = gemini_intent or local_intent
+        source = "gemini" if gemini_intent else "local"
+        target_date = _assistant_target_date(text); today = datetime.now(ROME_TZ).date().isoformat()
+        if intent in {"my_shift", "my_vehicle", "my_patient"}:
+            shifts = await _assistant_my_shifts(user["id"]); day_shifts = [shift for shift in shifts if shift.get("date") == target_date]
+            if not day_shifts:
+                reply = f"Non risultano turni assegnati per {'domani' if target_date != today else 'oggi'}."
+            else:
+                shift = day_shifts[0]; time_text = shift.get("time_start") or "orario non indicato"
+                if intent == "my_vehicle": reply = f"Per il turno del {target_date} alle {time_text} risulta: {shift.get('vehicle') or 'nessun mezzo ancora assegnato'}."
+                elif intent == "my_patient": reply = f"Per il turno del {target_date} alle {time_text} risulta: {shift.get('patient_name') or 'nessun paziente ancora indicato'}."
+                else: reply = f"Il tuo turno è il {target_date} dalle {time_text}{('–' + shift.get('time_end')) if shift.get('time_end') else ''}{(', mezzo ' + shift.get('vehicle')) if shift.get('vehicle') else ''}."
+        elif intent == "next_service":
+            shifts = await _assistant_my_shifts(user["id"], today)
+            reply = "Non risultano prossimi Servizi assegnati." if not shifts else f"Il prossimo Servizio è il {shifts[0].get('date')} alle {shifts[0].get('time_start')}{(' con ' + shifts[0].get('vehicle')) if shifts[0].get('vehicle') else ''}."
+        elif intent == "service_count":
+            query = {"slot_date": target_date, "status": {"$in": ACTIVE_STATUSES}}
+            count = await db.bookings.count_documents(query); reply = f"Per il {target_date} risultano {count} Servizi registrati."
+        else:
+            reply = "Posso creare un servizio con conferma, leggere il tuo turno, il mezzo, il paziente assegnato e il prossimo Servizio."
 
-    await db.assistant_audit.insert_one({
-        "id": str(uuid.uuid4()),
-        "user_id": user["id"],
-        "intent": intent,
-        "source": source,
-        "message": body.message[:1000],
-        "created_at": datetime.now(timezone.utc).isoformat(),
-    })
-
-    return AssistantChatResponse(
-        reply=reply,
-        intent=intent,
-        source=source,
-        suggestions=["Che turno faccio domani?", "Quale mezzo ho assegnato?", "Qual è il mio prossimo Servizio?"],
-    )
+    await db.assistant_audit.insert_one({"id": str(uuid.uuid4()), "user_id": user["id"], "intent": intent, "source": source, "message": text[:1000], "phase": phase, "created_at": datetime.now(timezone.utc).isoformat()})
+    return AssistantChatResponse(reply=reply, intent=intent, source=source, suggestions=suggestions, phase=phase, requires_confirmation=phase == "confirm", created_booking_id=created_booking_id)
 
 
 # ----- Gallery (foto Home) -----

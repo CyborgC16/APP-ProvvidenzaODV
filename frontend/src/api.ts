@@ -174,6 +174,9 @@ export type AssistantChatResponse = {
   intent: string;
   source: "local" | "gemini";
   suggestions: string[];
+  phase?: string | null;
+  requires_confirmation?: boolean;
+  created_booking_id?: string | null;
 };
 
 export type NotificationItem = {

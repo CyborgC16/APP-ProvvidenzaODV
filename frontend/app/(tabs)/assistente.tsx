@@ -4,16 +4,21 @@ import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import { SafeAreaView } from "react-native-safe-area-context";
 
-import { api, AssistantMessage } from "@/src/api";
+import { api, AssistantMessage, AssistantChatResponse } from "@/src/api";
 import { COLORS, RADIUS, SHADOW, SPACING } from "@/src/theme";
 import { useAuth } from "@/src/auth";
 
-const START_MESSAGE: AssistantMessage = {
-  role: "assistant",
-  content: "Ciao! Sono l’Assistente Provvidenza. Posso leggere i tuoi turni, il mezzo o il paziente assegnato e il prossimo Servizio.",
-};
+type ChatItem = AssistantMessage & { id: string; timestamp: string };
+
+const makeMessage = (role: "user" | "assistant", content: string): ChatItem => ({
+  id: `${Date.now()}-${Math.random()}`,
+  role,
+  content,
+  timestamp: new Date().toLocaleTimeString("it-IT", { hour: "2-digit", minute: "2-digit" }),
+});
 
 const QUICK = [
+  "Aggiungi un servizio",
   "Che turno faccio domani?",
   "Quale mezzo ho assegnato?",
   "Qual è il mio prossimo Servizio?",
@@ -21,37 +26,41 @@ const QUICK = [
 
 export default function AssistenteScreen() {
   const { user } = useAuth();
-  const [messages, setMessages] = useState<AssistantMessage[]>([START_MESSAGE]);
+  const [messages, setMessages] = useState<ChatItem[]>([
+    makeMessage("assistant", "Ciao! Posso creare un servizio guidandoti passo passo oppure leggere turni, mezzi e pazienti assegnati."),
+  ]);
   const [input, setInput] = useState("");
   const [sending, setSending] = useState(false);
+  const [lastResponse, setLastResponse] = useState<AssistantChatResponse | null>(null);
   const inputRef = useRef<TextInput>(null);
+  const listRef = useRef<FlatList<ChatItem>>(null);
   const canSend = useMemo(() => input.trim().length > 0 && !sending && Boolean(user), [input, sending, user]);
 
   const send = async (preset?: string) => {
     const text = (preset ?? input).trim();
     if (!text || sending) return;
-    const userMessage: AssistantMessage = { role: "user", content: text };
+    const userMessage = makeMessage("user", text);
     const next = [...messages, userMessage];
     setMessages(next);
     setInput("");
     setSending(true);
     try {
-      const response = await api.assistantChat(text, next.slice(-10));
-      setMessages((current) => [...current, { role: "assistant", content: response.reply }]);
+      const history: AssistantMessage[] = next.slice(-10).map(({ role, content }) => ({ role, content }));
+      const response = await api.assistantChat(text, history);
+      setLastResponse(response);
+      setMessages((current) => [...current, makeMessage("assistant", response.reply)]);
     } catch (error) {
       const detail = error instanceof Error ? error.message : "Errore sconosciuto";
-      setMessages((current) => [...current, { role: "assistant", content: `Non riesco a contattare il server: ${detail}` }]);
+      setMessages((current) => [...current, makeMessage("assistant", `Non riesco a completare la richiesta: ${detail}`)]);
     } finally {
       setSending(false);
+      setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 100);
     }
   };
 
   const useVoiceKeyboard = () => {
     inputRef.current?.focus();
-    Alert.alert(
-      "Dettatura vocale",
-      "Tocca il microfono della tastiera per dettare la richiesta. Il comando “Ehi Google” verrà collegato nella fase Android successiva."
-    );
+    Alert.alert("Dettatura vocale", "Tocca il microfono della tastiera e pronuncia la richiesta.");
   };
 
   return (
@@ -61,31 +70,49 @@ export default function AssistenteScreen() {
           <View style={styles.iconBadge}><Ionicons name="sparkles" size={25} color={COLORS.white} /></View>
           <View style={styles.headerText}>
             <Text style={styles.title}>Assistente Provvidenza</Text>
-            <Text style={styles.subtitle}>Sola lettura · dati protetti dal tuo account</Text>
+            <Text style={styles.subtitle}>Conversazione guidata · conferma obbligatoria</Text>
           </View>
           <View style={styles.onlineDot} />
         </LinearGradient>
 
         <FlatList
+          ref={listRef}
           data={messages}
-          keyExtractor={(_, index) => String(index)}
+          keyExtractor={(item) => item.id}
           contentContainerStyle={styles.list}
+          onContentSizeChange={() => listRef.current?.scrollToEnd({ animated: true })}
           renderItem={({ item }) => (
-            <View style={[styles.bubble, item.role === "user" ? styles.userBubble : styles.assistantBubble]}>
-              {item.role === "assistant" && <Ionicons name="sparkles" size={15} color={COLORS.brand} style={styles.bubbleIcon} />}
-              <Text style={[styles.message, item.role === "user" && styles.userMessage]}>{item.content}</Text>
+            <View style={[styles.messageBlock, item.role === "user" ? styles.userBlock : styles.assistantBlock]}>
+              <View style={[styles.bubble, item.role === "user" ? styles.userBubble : styles.assistantBubble]}>
+                {item.role === "assistant" && <Ionicons name="sparkles" size={15} color={COLORS.brand} style={styles.bubbleIcon} />}
+                <Text style={[styles.message, item.role === "user" && styles.userMessage]}>{item.content}</Text>
+              </View>
+              <Text style={[styles.timestamp, item.role === "user" && styles.userTimestamp]}>{item.timestamp}</Text>
             </View>
           )}
-          ListFooterComponent={sending ? <Text style={styles.typing}>Sto controllando…</Text> : null}
+          ListFooterComponent={sending ? <View style={styles.typingBubble}><Text style={styles.typing}>Sto elaborando…</Text></View> : null}
         />
 
-        <View style={styles.quickRow}>
-          {QUICK.map((item) => (
-            <Pressable key={item} style={styles.quickChip} onPress={() => void send(item)} disabled={sending}>
-              <Text style={styles.quickText}>{item}</Text>
+        {lastResponse?.requires_confirmation && !sending ? (
+          <View style={styles.confirmRow}>
+            <Pressable style={[styles.confirmButton, styles.cancelButton]} onPress={() => void send("annulla")}>
+              <Ionicons name="close" size={18} color={COLORS.onSurface} />
+              <Text style={styles.cancelText}>Annulla</Text>
             </Pressable>
-          ))}
-        </View>
+            <Pressable style={[styles.confirmButton, styles.okButton]} onPress={() => void send("confermo")}>
+              <Ionicons name="checkmark" size={18} color={COLORS.white} />
+              <Text style={styles.okText}>Conferma</Text>
+            </Pressable>
+          </View>
+        ) : (
+          <View style={styles.quickRow}>
+            {QUICK.map((item) => (
+              <Pressable key={item} style={styles.quickChip} onPress={() => void send(item)} disabled={sending}>
+                <Text style={styles.quickText}>{item}</Text>
+              </Pressable>
+            ))}
+          </View>
+        )}
 
         <View style={styles.composer}>
           <Pressable style={styles.micButton} onPress={useVoiceKeyboard} accessibilityLabel="Usa dettatura vocale">
@@ -121,16 +148,28 @@ const styles = StyleSheet.create({
   subtitle: { color: "rgba(255,255,255,0.72)", fontSize: 12, marginTop: 3 },
   onlineDot: { width: 10, height: 10, borderRadius: 5, backgroundColor: "#43D17A" },
   list: { padding: SPACING.lg, paddingBottom: 18, gap: 10 },
-  bubble: { maxWidth: "88%", borderRadius: RADIUS.lg, paddingHorizontal: 15, paddingVertical: 12, flexDirection: "row", alignItems: "flex-start", ...SHADOW.card },
-  assistantBubble: { alignSelf: "flex-start", backgroundColor: COLORS.white, borderTopLeftRadius: 5 },
-  userBubble: { alignSelf: "flex-end", backgroundColor: COLORS.navy, borderTopRightRadius: 5 },
+  messageBlock: { maxWidth: "88%" },
+  userBlock: { alignSelf: "flex-end", alignItems: "flex-end" },
+  assistantBlock: { alignSelf: "flex-start", alignItems: "flex-start" },
+  bubble: { borderRadius: RADIUS.lg, paddingHorizontal: 15, paddingVertical: 12, flexDirection: "row", alignItems: "flex-start", ...SHADOW.card },
+  assistantBubble: { backgroundColor: COLORS.white, borderTopLeftRadius: 5 },
+  userBubble: { backgroundColor: COLORS.navy, borderTopRightRadius: 5 },
   bubbleIcon: { marginRight: 7, marginTop: 2 },
-  message: { flexShrink: 1, color: COLORS.onSurface, fontSize: 15, lineHeight: 21 },
+  message: { flexShrink: 1, color: COLORS.onSurface, fontSize: 15, lineHeight: 22 },
   userMessage: { color: COLORS.white },
-  typing: { color: COLORS.onSurfaceMuted, fontStyle: "italic", marginTop: 4 },
+  timestamp: { fontSize: 10, color: COLORS.onSurfaceMuted, marginTop: 4, marginLeft: 8 },
+  userTimestamp: { marginLeft: 0, marginRight: 8 },
+  typingBubble: { alignSelf: "flex-start", backgroundColor: COLORS.white, borderRadius: RADIUS.lg, paddingHorizontal: 14, paddingVertical: 10 },
+  typing: { color: COLORS.onSurfaceMuted, fontStyle: "italic" },
   quickRow: { paddingHorizontal: SPACING.md, paddingBottom: 10, flexDirection: "row", flexWrap: "wrap", gap: 7 },
   quickChip: { backgroundColor: "#FFF2EA", borderColor: "#FFD4BA", borderWidth: 1, borderRadius: 999, paddingHorizontal: 11, paddingVertical: 8 },
   quickText: { color: COLORS.brandDark ?? COLORS.brand, fontSize: 12, fontWeight: "700" },
+  confirmRow: { flexDirection: "row", gap: 10, paddingHorizontal: SPACING.md, paddingBottom: 10 },
+  confirmButton: { flex: 1, height: 46, borderRadius: 16, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 7 },
+  cancelButton: { backgroundColor: COLORS.white, borderWidth: 1, borderColor: COLORS.border },
+  okButton: { backgroundColor: COLORS.brand },
+  cancelText: { color: COLORS.onSurface, fontWeight: "800" },
+  okText: { color: COLORS.white, fontWeight: "800" },
   composer: { margin: SPACING.md, marginTop: 0, flexDirection: "row", alignItems: "flex-end", backgroundColor: COLORS.white, borderRadius: 22, padding: 7, gap: 7, borderWidth: 1, borderColor: COLORS.border, ...SHADOW.floating },
   micButton: { width: 42, height: 42, borderRadius: 21, backgroundColor: "#FFF2EA", alignItems: "center", justifyContent: "center" },
   input: { flex: 1, minHeight: 42, maxHeight: 110, paddingHorizontal: 8, paddingVertical: 10, color: COLORS.onSurface, fontSize: 15 },

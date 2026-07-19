@@ -63,7 +63,7 @@ export default function TabsLayout() {
       <Tabs.Screen name="turni" options={{ title: t("tab_turni"), href: isSC ? "/(tabs)/turni" : null, tabBarIcon: ({ color, size }) => <Ionicons name="time" size={size} color={color} /> }} />
       <Tabs.Screen name="servizio-civile" options={{ title: t("tab_servizio_civile"), tabBarIcon: ({ color, size }) => <Ionicons name="heart" size={size} color={color} /> }} />
       <Tabs.Screen name="volontari" options={{ title: t("tab_volontari"), tabBarIcon: ({ color, size }) => <Ionicons name="people" size={size} color={color} /> }} />
-      <Tabs.Screen name="assistente" options={{ href: null, title: "Assistente" }} />
+      <Tabs.Screen name="assistente" options={{ title: "Assistente", tabBarIcon: ({ color, size }) => <Ionicons name="sparkles" size={size} color={color} /> }} />
       <Tabs.Screen name="account" options={{ title: t("tab_account"), tabBarIcon: ({ color, size }) => <Ionicons name="person-circle" size={size} color={color} /> }} />
     </Tabs>
   );
