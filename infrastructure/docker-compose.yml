@@ -51,6 +51,8 @@ services:
       BOOKING_CC_EMAIL: ${BOOKING_CC_EMAIL}
       BOOKING_SUBJECT: ${BOOKING_SUBJECT}
       PRODUCTION: 'true'
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      GEMINI_MODEL: ${GEMINI_MODEL:-gemini-3.5-flash}
     ports:
     - 127.0.0.1:8000:8000
     depends_on:

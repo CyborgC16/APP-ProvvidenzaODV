@@ -163,6 +163,19 @@ export type DayAvailability = {
   furgone_available: number;
 };
 
+
+export type AssistantMessage = {
+  role: "user" | "assistant";
+  content: string;
+};
+
+export type AssistantChatResponse = {
+  reply: string;
+  intent: string;
+  source: "local" | "gemini";
+  suggestions: string[];
+};
+
 export type NotificationItem = {
   id: string;
   title: string;
@@ -222,6 +235,12 @@ export const api = {
   },
   async me() {
     return request<UserPublic>("/auth/me");
+  },
+  async assistantChat(message: string, history: AssistantMessage[] = []) {
+    return request<AssistantChatResponse>("/assistant/chat", {
+      method: "POST",
+      body: JSON.stringify({ message, history }),
+    });
   },
   async presenceHeartbeat() {
     return request<{ ok: boolean; last_seen_at: string }>("/presence/heartbeat", { method: "POST" });

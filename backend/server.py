@@ -12,6 +12,12 @@ import smtplib
 import secrets
 import string
 import uuid
+import json
+import re
+import urllib.request
+import urllib.error
+import asyncio
+from zoneinfo import ZoneInfo
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from pathlib import Path
@@ -229,6 +235,75 @@ async def clear_failed_logins(username: str, ip: str):
     })
 
 
+# ===== Assistente IA (sola lettura) =====
+ROME_TZ = ZoneInfo("Europe/Rome")
+GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "").strip()
+GEMINI_MODEL = os.environ.get("GEMINI_MODEL", "gemini-3.5-flash").strip()
+
+
+def _assistant_target_date(text: str) -> str:
+    now = datetime.now(ROME_TZ)
+    lower = text.lower()
+    if "dopodomani" in lower:
+        return (now + timedelta(days=2)).date().isoformat()
+    if "domani" in lower:
+        return (now + timedelta(days=1)).date().isoformat()
+    return now.date().isoformat()
+
+
+def _assistant_local_intent(text: str) -> str:
+    lower = text.lower()
+    if any(k in lower for k in ("turno", "turni", "orario")):
+        return "my_shift"
+    if any(k in lower for k in ("auto", "ambulanza", "mezzo", "veicolo")):
+        return "my_vehicle"
+    if any(k in lower for k in ("paziente", "trasporto chi", "chi devo")):
+        return "my_patient"
+    if any(k in lower for k in ("prossimo servizio", "servizio prossimo", "quando lavoro")):
+        return "next_service"
+    if any(k in lower for k in ("quanti servizi", "servizi oggi", "servizi domani")):
+        return "service_count"
+    return "help"
+
+
+def _gemini_classify_sync(message: str, history: list[dict]) -> Optional[str]:
+    if not GEMINI_API_KEY:
+        return None
+    prompt = (
+        "Classifica la richiesta per il gestionale La Provvidenza. "
+        "Rispondi esclusivamente con JSON valido: {\"intent\":\"...\"}. "
+        "Intent consentiti: my_shift, my_vehicle, my_patient, next_service, service_count, help. "
+        "Non inventare dati. Richiesta: " + message
+    )
+    payload = {
+        "contents": [{"role": "user", "parts": [{"text": prompt}]}],
+        "generationConfig": {"temperature": 0, "responseMimeType": "application/json"},
+    }
+    req = urllib.request.Request(
+        f"https://generativelanguage.googleapis.com/v1beta/models/{GEMINI_MODEL}:generateContent",
+        data=json.dumps(payload).encode("utf-8"),
+        headers={"Content-Type": "application/json", "x-goog-api-key": GEMINI_API_KEY},
+        method="POST",
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=12) as response:
+            data = json.loads(response.read().decode("utf-8"))
+        text = data["candidates"][0]["content"]["parts"][0]["text"]
+        intent = json.loads(text).get("intent")
+        if intent in {"my_shift", "my_vehicle", "my_patient", "next_service", "service_count", "help"}:
+            return intent
+    except Exception as exc:
+        logger.warning("Gemini non disponibile, uso classificazione locale: %s", exc)
+    return None
+
+
+async def _assistant_my_shifts(user_id: str, date_from: Optional[str] = None) -> list[dict]:
+    query: dict = {"assigned_user_id": user_id}
+    if date_from:
+        query["date"] = {"$gte": date_from}
+    return await db.shifts.find(query, {"_id": 0}).sort([("date", 1), ("time_start", 1)]).to_list(50)
+
+
 # ===== Models =====
 class UserPublic(BaseModel):
     id: str
@@ -357,6 +432,23 @@ class PresencePublic(BaseModel):
 class AnnouncementReadPublic(BaseModel):
     announcement_id: str
     read_at: str
+
+
+class AssistantMessage(BaseModel):
+    role: Literal["user", "assistant"]
+    content: str = Field(min_length=1, max_length=2000)
+
+
+class AssistantChatRequest(BaseModel):
+    message: str = Field(min_length=1, max_length=1000)
+    history: List[AssistantMessage] = Field(default_factory=list, max_length=12)
+
+
+class AssistantChatResponse(BaseModel):
+    reply: str
+    intent: str
+    source: Literal["local", "gemini"]
+    suggestions: List[str] = Field(default_factory=list)
 
 
 class ShiftCreateRequest(BaseModel):
@@ -1479,6 +1571,73 @@ async def create_shift(body: ShiftCreateRequest, user: dict = Depends(require_ro
 async def delete_shift(shift_id: str, user: dict = Depends(require_role("master", "admin"))):
     await db.shifts.delete_one({"id": shift_id})
     return {"ok": True}
+
+
+# ----- Assistente Provvidenza (prima fase: sola lettura) -----
+@api_router.post("/assistant/chat", response_model=AssistantChatResponse)
+async def assistant_chat(body: AssistantChatRequest, user: dict = Depends(get_current_user)):
+    local_intent = _assistant_local_intent(body.message)
+    gemini_intent = await asyncio.to_thread(_gemini_classify_sync, body.message, [m.model_dump() for m in body.history])
+    intent = gemini_intent or local_intent
+    source = "gemini" if gemini_intent else "local"
+    target_date = _assistant_target_date(body.message)
+    today = datetime.now(ROME_TZ).date().isoformat()
+
+    if intent in {"my_shift", "my_vehicle", "my_patient"}:
+        shifts = await _assistant_my_shifts(user["id"])
+        day_shifts = [shift for shift in shifts if shift.get("date") == target_date]
+        if not day_shifts:
+            label = "domani" if target_date != today else "oggi"
+            reply = f"Non risultano turni assegnati per {label}."
+        else:
+            shift = day_shifts[0]
+            time_text = shift.get("time_start") or "orario non indicato"
+            if intent == "my_vehicle":
+                vehicle = shift.get("vehicle") or "nessun mezzo ancora assegnato"
+                reply = f"Per il turno del {target_date} alle {time_text} risulta: {vehicle}."
+            elif intent == "my_patient":
+                patient = shift.get("patient_name") or "nessun paziente ancora indicato"
+                reply = f"Per il turno del {target_date} alle {time_text} risulta: {patient}."
+            else:
+                end = f"–{shift.get('time_end')}" if shift.get("time_end") else ""
+                vehicle = f", mezzo {shift.get('vehicle')}" if shift.get("vehicle") else ""
+                reply = f"Il tuo turno è il {target_date} dalle {time_text}{end}{vehicle}."
+    elif intent == "next_service":
+        shifts = await _assistant_my_shifts(user["id"], today)
+        if not shifts:
+            reply = "Non risultano prossimi Servizi assegnati."
+        else:
+            shift = shifts[0]
+            vehicle = f" con {shift.get('vehicle')}" if shift.get("vehicle") else ""
+            reply = f"Il prossimo Servizio è il {shift.get('date')} alle {shift.get('time_start')}{vehicle}."
+    elif intent == "service_count":
+        query = {"date": target_date}
+        if user.get("role") not in ("master", "admin"):
+            query["assigned_user_id"] = user["id"]
+        count = await db.shifts.count_documents(query)
+        scope = "assegnati a te" if user.get("role") not in ("master", "admin") else "registrati"
+        reply = f"Per il {target_date} risultano {count} Servizi {scope}."
+    else:
+        reply = (
+            "Posso dirti il tuo prossimo turno, il mezzo o il paziente assegnato e quanti Servizi sono previsti. "
+            "La creazione vocale dei Servizi verrà attivata nella fase successiva con riepilogo e conferma obbligatoria."
+        )
+
+    await db.assistant_audit.insert_one({
+        "id": str(uuid.uuid4()),
+        "user_id": user["id"],
+        "intent": intent,
+        "source": source,
+        "message": body.message[:1000],
+        "created_at": datetime.now(timezone.utc).isoformat(),
+    })
+
+    return AssistantChatResponse(
+        reply=reply,
+        intent=intent,
+        source=source,
+        suggestions=["Che turno faccio domani?", "Quale mezzo ho assegnato?", "Qual è il mio prossimo Servizio?"],
+    )
 
 
 # ----- Gallery (foto Home) -----

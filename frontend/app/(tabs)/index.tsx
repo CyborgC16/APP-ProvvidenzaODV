@@ -65,6 +65,7 @@ export default function Home() {
   });
 
   const actions = [
+    { title: "Assistente Provvidenza", subtitle: "Chiedi turni, mezzi e prossimi Servizi", icon: "sparkles-outline" as const, onPress: () => router.push("/(tabs)/assistente") },
     { title: "Prenota un trasporto", subtitle: "Richiedi un servizio in pochi passaggi", icon: "calendar-outline" as const, onPress: () => router.push("/(tabs)/prenota") },
     { title: "I nostri volontari", subtitle: "Scopri la squadra", icon: "people-outline" as const, onPress: () => router.push("/(tabs)/volontari") },
     { title: "Servizio Civile", subtitle: "Informazioni e opportunità", icon: "heart-outline" as const, onPress: () => router.push("/(tabs)/servizio-civile") },
