@@ -23,7 +23,9 @@ const QUICK = [
   "Aggiungi un servizio domani alle 15",
   "Annulla l’ultimo servizio",
   "Che turno faccio domani?",
-  "Quale mezzo ho assegnato?",
+  "Riepilogo servizi questa settimana",
+  "Quale mezzo ho assegnato domani?",
+  "Quale paziente ho domani?",
 ];
 
 export default function AssistenteScreen() {
@@ -32,7 +34,7 @@ export default function AssistenteScreen() {
   const incomingUrl = Linking.useURL();
   const handledVoiceRequests = useRef(new Set<string>());
   const [messages, setMessages] = useState<ChatItem[]>([
-    makeMessage("assistant", "Ciao! Parlami normalmente: posso creare o annullare servizi e consultare turni, mezzi e pazienti assegnati."),
+    makeMessage("assistant", "Ciao! Parlami normalmente: posso creare o annullare servizi, consultare turni, mezzi e pazienti, e preparare statistiche rapide."),
   ]);
   const [input, setInput] = useState("");
   const [sending, setSending] = useState(false);

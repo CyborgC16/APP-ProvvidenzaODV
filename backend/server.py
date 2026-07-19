@@ -292,6 +292,35 @@ def _assistant_target_date(text: str) -> str:
     return _assistant_parse_date(text) or datetime.now(ROME_TZ).date().isoformat()
 
 
+def _assistant_date_range(text: str) -> tuple[str, str, str]:
+    normalized = _assistant_normalize(text)
+    today = datetime.now(ROME_TZ).date()
+
+    if any(value in normalized for value in ("questa settimana", "settimana corrente", "in settimana")):
+        start = today - timedelta(days=today.weekday())
+        end = start + timedelta(days=6)
+        return start.isoformat(), end.isoformat(), "questa settimana"
+
+    if any(value in normalized for value in ("prossima settimana", "settimana prossima")):
+        start = today + timedelta(days=7 - today.weekday())
+        end = start + timedelta(days=6)
+        return start.isoformat(), end.isoformat(), "la prossima settimana"
+
+    if any(value in normalized for value in ("questo mese", "mese corrente", "nel mese")):
+        start = today.replace(day=1)
+        if start.month == 12:
+            next_month = start.replace(year=start.year + 1, month=1)
+        else:
+            next_month = start.replace(month=start.month + 1)
+        end = next_month - timedelta(days=1)
+        return start.isoformat(), end.isoformat(), "questo mese"
+
+    explicit = _assistant_parse_date(text)
+    target = explicit or today.isoformat()
+    label = target if explicit else "oggi"
+    return target, target, label
+
+
 def _assistant_parse_time(text: str) -> Optional[str]:
     normalized = _assistant_normalize(text).replace('.', ':')
     word_hours = {
@@ -344,7 +373,11 @@ def _assistant_local_intent(text: str) -> str:
         return "my_patient"
     if any(k in lower for k in ("prossimo servizio", "servizio prossimo", "prossimo trasporto")):
         return "next_service"
-    if any(k in lower for k in ("quanti servizi", "numero servizi", "servizi oggi", "servizi domani")):
+    if any(k in lower for k in (
+        "quanti servizi", "numero servizi", "servizi oggi", "servizi domani",
+        "statistiche", "riepilogo servizi", "totale servizi", "servizi annullati",
+        "servizi attivi", "quante ambulanze", "quanti furgoni", "quante auto"
+    )):
         return "service_count"
     return "help"
 
@@ -359,7 +392,8 @@ def _gemini_classify_sync(message: str, history: list[dict]) -> Optional[str]:
         "nel formato {\"intent\":\"...\"}. Intent: create_service, cancel_service, my_shift, "
         "my_vehicle, my_patient, next_service, service_count, help. "
         "Usa cancel_service quando l'utente vuole annullare o cancellare un servizio gia creato; "
-        "usa create_service quando vuole aggiungere, prenotare o bloccare un servizio.\n"
+        "usa create_service quando vuole aggiungere, prenotare o bloccare un servizio; "
+        "usa service_count anche per statistiche, riepiloghi, servizi attivi/annullati e conteggi per mezzo.\n"
         f"Cronologia:\n{history_text}\nRichiesta: {message}"
     )
     payload = {"contents": [{"role": "user", "parts": [{"text": prompt}]}], "generationConfig": {"temperature": 0, "responseMimeType": "application/json"}}
@@ -1893,8 +1927,34 @@ async def assistant_chat(body: AssistantChatRequest, user: dict = Depends(get_cu
                 shifts = await _assistant_my_shifts(user["id"], today)
                 reply = "Non risultano prossimi Servizi assegnati." if not shifts else f"Il prossimo Servizio è il {shifts[0].get('date')} alle {shifts[0].get('time_start')}{(' con ' + shifts[0].get('vehicle')) if shifts[0].get('vehicle') else ''}."
             elif intent == "service_count":
-                count = await db.bookings.count_documents({"slot_date": target_date, "status": {"$in": ACTIVE_STATUSES}})
-                reply = f"Per il {target_date} risultano {count} Servizi registrati."
+                date_from, date_to, period_label = _assistant_date_range(text)
+                date_query = {"$gte": date_from, "$lte": date_to}
+                bookings = await db.bookings.find(
+                    {"slot_date": date_query},
+                    {"_id": 0, "status": 1, "vehicle_type": 1},
+                ).to_list(5000)
+                active = [item for item in bookings if item.get("status") in ACTIVE_STATUSES]
+                cancelled = [item for item in bookings if item.get("status") == "annullata"]
+                ambulances = sum(1 for item in active if item.get("vehicle_type") == "ambulanza")
+                other_vehicles = len(active) - ambulances
+
+                normalized = _assistant_normalize(text)
+                if "annullat" in normalized or "cancellat" in normalized:
+                    reply = f"Per {period_label} risultano {len(cancelled)} Servizi annullati."
+                elif "ambulanz" in normalized:
+                    reply = f"Per {period_label} risultano {ambulances} Servizi attivi con ambulanza."
+                elif any(word in normalized for word in ("furgon", "auto", "macchin", "vettur")):
+                    reply = f"Per {period_label} risultano {other_vehicles} Servizi attivi con auto/furgone."
+                elif any(word in normalized for word in ("statistic", "riepilogo", "totale")):
+                    reply = (
+                        f"Riepilogo per {period_label}:\n"
+                        f"• Servizi attivi: {len(active)}\n"
+                        f"• Servizi annullati: {len(cancelled)}\n"
+                        f"• Con ambulanza: {ambulances}\n"
+                        f"• Con auto/furgone: {other_vehicles}"
+                    )
+                else:
+                    reply = f"Per {period_label} risultano {len(active)} Servizi attivi."
             else:
                 reply = "Puoi parlarmi in modo naturale. Posso creare o annullare un servizio, leggere turni, mezzi, pazienti e prossimi servizi."
 
