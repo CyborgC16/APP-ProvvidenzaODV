@@ -1,0 +1,71 @@
+<?xml version="1.0" encoding="utf-8"?>
+<shortcuts xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <!-- Scorciatoie visibili tenendo premuta l'icona dell'app. -->
+    <shortcut
+        android:shortcutId="provvidenza_assistente"
+        android:enabled="true"
+        android:icon="@mipmap/ic_launcher"
+        android:shortcutShortLabel="@string/shortcut_assistant_short"
+        android:shortcutLongLabel="@string/shortcut_assistant_long">
+        <intent
+            android:action="android.intent.action.VIEW"
+            android:targetPackage="it.laprovvindenza.app"
+            android:targetClass="it.laprovvindenza.app.MainActivity"
+            android:data="laprovvidenza://assistente" />
+        <categories android:name="android.shortcut.conversation" />
+        <capability-binding android:key="actions.intent.OPEN_APP_FEATURE">
+            <parameter-binding
+                android:key="feature"
+                android:value="@array/assistant_feature_synonyms" />
+        </capability-binding>
+    </shortcut>
+
+    <shortcut
+        android:shortcutId="provvidenza_nuovo_servizio"
+        android:enabled="true"
+        android:icon="@mipmap/ic_launcher"
+        android:shortcutShortLabel="@string/shortcut_service_short"
+        android:shortcutLongLabel="@string/shortcut_service_long">
+        <intent
+            android:action="android.intent.action.VIEW"
+            android:targetPackage="it.laprovvindenza.app"
+            android:targetClass="it.laprovvindenza.app.MainActivity"
+            android:data="laprovvidenza://assistente?prompt=Aggiungi%20un%20servizio" />
+        <capability-binding android:key="actions.intent.OPEN_APP_FEATURE">
+            <parameter-binding
+                android:key="feature"
+                android:value="@array/new_service_feature_synonyms" />
+        </capability-binding>
+    </shortcut>
+
+    <shortcut
+        android:shortcutId="provvidenza_turni"
+        android:enabled="true"
+        android:icon="@mipmap/ic_launcher"
+        android:shortcutShortLabel="@string/shortcut_shift_short"
+        android:shortcutLongLabel="@string/shortcut_shift_long">
+        <intent
+            android:action="android.intent.action.VIEW"
+            android:targetPackage="it.laprovvindenza.app"
+            android:targetClass="it.laprovvindenza.app.MainActivity"
+            android:data="laprovvidenza://assistente?prompt=Che%20turno%20faccio%20domani%3F" />
+        <capability-binding android:key="actions.intent.OPEN_APP_FEATURE">
+            <parameter-binding
+                android:key="feature"
+                android:value="@array/shifts_feature_synonyms" />
+        </capability-binding>
+    </shortcut>
+
+    <!-- App Action: apre una funzionalità specifica tramite Assistente Google. -->
+    <capability android:name="actions.intent.OPEN_APP_FEATURE">
+        <intent
+            android:action="android.intent.action.VIEW"
+            android:targetPackage="it.laprovvindenza.app"
+            android:targetClass="it.laprovvindenza.app.MainActivity">
+            <parameter
+                android:name="feature"
+                android:key="feature" />
+        </intent>
+    </capability>
+</shortcuts>

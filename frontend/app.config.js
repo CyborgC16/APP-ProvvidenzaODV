@@ -59,6 +59,7 @@ module.exports = {
 
     plugins: [
       "expo-router",
+      "./plugins/withGoogleAssistantShortcuts",
       [
         "expo-splash-screen",
         {

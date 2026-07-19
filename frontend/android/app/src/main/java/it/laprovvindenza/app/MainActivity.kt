@@ -3,6 +3,8 @@ import expo.modules.splashscreen.SplashScreenManager
 
 import android.os.Build
 import android.os.Bundle
+import android.content.Intent
+import android.net.Uri
 
 import com.facebook.react.ReactActivity
 import com.facebook.react.ReactActivityDelegate
@@ -13,6 +15,7 @@ import expo.modules.ReactActivityDelegateWrapper
 
 class MainActivity : ReactActivity() {
   override fun onCreate(savedInstanceState: Bundle?) {
+    normalizeAssistantIntent(intent)?.let { setIntent(it) }
     // Set the theme to AppTheme BEFORE onCreate to support
     // coloring the background, status bar, and navigation bar.
     // This is required for expo-splash-screen.
@@ -21,6 +24,30 @@ class MainActivity : ReactActivity() {
     SplashScreenManager.registerOnActivity(this)
     // @generated end expo-splashscreen
     super.onCreate(null)
+  }
+
+  override fun onNewIntent(newIntent: Intent) {
+    val normalizedIntent = normalizeAssistantIntent(newIntent) ?: newIntent
+    super.onNewIntent(normalizedIntent)
+    setIntent(normalizedIntent)
+  }
+
+  private fun normalizeAssistantIntent(source: Intent?): Intent? {
+    if (source == null || source.data != null) return source
+
+    val feature = source.getStringExtra("feature")?.trim()?.lowercase() ?: return source
+    val prompt = when {
+      feature.contains("turn") -> "Che turno faccio domani?"
+      feature.contains("servizio") || feature.contains("prenota") -> "Aggiungi un servizio"
+      else -> null
+    }
+
+    val uriBuilder = Uri.Builder()
+      .scheme("laprovvidenza")
+      .authority("assistente")
+    if (prompt != null) uriBuilder.appendQueryParameter("prompt", prompt)
+    source.data = uriBuilder.build()
+    return source
   }
 
   /**

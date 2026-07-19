@@ -1,6 +1,8 @@
-import { useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Alert, FlatList, KeyboardAvoidingView, Platform, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
+import * as Linking from "expo-linking";
+import { useLocalSearchParams } from "expo-router";
 import { LinearGradient } from "expo-linear-gradient";
 import { SafeAreaView } from "react-native-safe-area-context";
 
@@ -26,6 +28,9 @@ const QUICK = [
 
 export default function AssistenteScreen() {
   const { user } = useAuth();
+  const params = useLocalSearchParams<{ prompt?: string | string[] }>();
+  const incomingUrl = Linking.useURL();
+  const handledVoiceRequests = useRef(new Set<string>());
   const [messages, setMessages] = useState<ChatItem[]>([
     makeMessage("assistant", "Ciao! Parlami normalmente: posso creare o annullare servizi e consultare turni, mezzi e pazienti assegnati."),
   ]);
@@ -36,9 +41,9 @@ export default function AssistenteScreen() {
   const listRef = useRef<FlatList<ChatItem>>(null);
   const canSend = useMemo(() => input.trim().length > 0 && !sending && Boolean(user), [input, sending, user]);
 
-  const send = async (preset?: string) => {
+  const send = useCallback(async (preset?: string) => {
     const text = (preset ?? input).trim();
-    if (!text || sending) return;
+    if (!text || sending || !user) return;
     const userMessage = makeMessage("user", text);
     const next = [...messages, userMessage];
     setMessages(next);
@@ -56,7 +61,29 @@ export default function AssistenteScreen() {
       setSending(false);
       setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 100);
     }
-  };
+  }, [input, messages, sending, user]);
+
+  useEffect(() => {
+    if (!user || sending) return;
+
+    const routePrompt = Array.isArray(params.prompt) ? params.prompt[0] : params.prompt;
+    let urlPrompt: string | undefined;
+    if (incomingUrl) {
+      const parsed = Linking.parse(incomingUrl);
+      const rawPrompt = parsed.queryParams?.prompt;
+      urlPrompt = Array.isArray(rawPrompt) ? String(rawPrompt[0]) : rawPrompt ? String(rawPrompt) : undefined;
+    }
+
+    const prompt = (urlPrompt || routePrompt || "").trim();
+    if (!prompt) return;
+
+    const requestKey = `${incomingUrl || "route"}:${prompt}`;
+    if (handledVoiceRequests.current.has(requestKey)) return;
+    handledVoiceRequests.current.add(requestKey);
+
+    const timer = setTimeout(() => void send(prompt), 250);
+    return () => clearTimeout(timer);
+  }, [incomingUrl, params.prompt, send, sending, user]);
 
   const useVoiceKeyboard = () => {
     inputRef.current?.focus();
