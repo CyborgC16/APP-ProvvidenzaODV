@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+  <string-array name="assistant_feature_synonyms">
+    <item>assistente</item>
+    <item>assistente provvidenza</item>
+    <item>chat</item>
+  </string-array>
+
+  <string-array name="new_service_feature_synonyms">
+    <item>nuovo servizio</item>
+    <item>crea servizio</item>
+    <item>aggiungi servizio</item>
+    <item>prenota servizio</item>
+  </string-array>
+
+  <string-array name="shifts_feature_synonyms">
+    <item>turni</item>
+    <item>il mio turno</item>
+    <item>turno di domani</item>
+  </string-array>
+</resources>

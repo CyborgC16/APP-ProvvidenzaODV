@@ -4,7 +4,7 @@ module.exports = {
   expo: {
     name: "La Provvidenza ODV",
     slug: "la-provvidenza-odv",
-    version: "2.0.0",
+    version: "2.1.0",
     orientation: "portrait",
     icon: "./assets/images/icon.png",
     scheme: "laprovvidenza",
@@ -24,7 +24,7 @@ module.exports = {
 
     android: {
       package: "it.laprovvindenza.app",
-      versionCode: 5,
+      versionCode: 6,
       allowBackup: false,
       adaptiveIcon: {
         foregroundImage: "./assets/images/adaptive-icon.png",

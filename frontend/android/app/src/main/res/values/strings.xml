@@ -3,28 +3,10 @@
   <string name="expo_system_ui_user_interface_style" translatable="false">automatic</string>
   <string name="expo_splash_screen_resize_mode" translatable="false">contain</string>
   <string name="expo_splash_screen_status_bar_translucent" translatable="false">false</string>
-
   <string name="shortcut_assistant_short">Assistente</string>
   <string name="shortcut_assistant_long">Apri Assistente Provvidenza</string>
   <string name="shortcut_service_short">Nuovo servizio</string>
   <string name="shortcut_service_long">Crea rapidamente un servizio</string>
   <string name="shortcut_shift_short">Turno di domani</string>
   <string name="shortcut_shift_long">Chiedi il turno di domani</string>
-
-  <string-array name="assistant_feature_synonyms">
-    <item>assistente</item>
-    <item>assistente provvidenza</item>
-    <item>chat</item>
-  </string-array>
-  <string-array name="new_service_feature_synonyms">
-    <item>nuovo servizio</item>
-    <item>crea servizio</item>
-    <item>aggiungi servizio</item>
-    <item>prenota servizio</item>
-  </string-array>
-  <string-array name="shifts_feature_synonyms">
-    <item>turni</item>
-    <item>il mio turno</item>
-    <item>turno di domani</item>
-  </string-array>
 </resources>
