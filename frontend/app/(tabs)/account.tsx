@@ -388,6 +388,12 @@ function AdminDashboard({
 
   return (
     <SafeAreaView style={styles.safe} edges={["top"]} testID="admin-dashboard">
+      <ScrollView
+        style={styles.adminScroll}
+        contentContainerStyle={styles.adminScrollContent}
+        nestedScrollEnabled
+        refreshControl={<RefreshControl refreshing={loading} onRefresh={load} tintColor={COLORS.brand} />}
+      >
       <View style={styles.dashHeader}>
         <View style={styles.profileRow}>
           {photoB64 ? (
@@ -459,10 +465,7 @@ function AdminDashboard({
         })}
       </ScrollView>
 
-      <ScrollView
-        contentContainerStyle={styles.dashBody}
-        refreshControl={<RefreshControl refreshing={loading} onRefresh={load} tintColor={COLORS.brand} />}
-      >
+      <View style={styles.dashBody}>
         <View style={styles.sectionHeader}>
           <Text style={styles.sectionTitle}>Disponibilità del giorno</Text>
         </View>
@@ -549,6 +552,7 @@ function AdminDashboard({
         )}
 
         <View style={{ height: 100 }} />
+      </View>
       </ScrollView>
 
       <Pressable onPress={() => setShowManual(true)} testID="manual-booking-fab" style={styles.fab}>
@@ -791,7 +795,9 @@ function ProfileEditor({ visible, onClose, onSaved }: { visible: boolean; onClos
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: COLORS.surface },
+  safe: { flex: 1, backgroundColor: COLORS.surface, overflow: "hidden" },
+  adminScroll: { flex: 1 },
+  adminScrollContent: { flexGrow: 1, paddingBottom: SPACING.xxxl + 72 },
   loginScroll: { padding: SPACING.xl, alignItems: "stretch", flexGrow: 1, justifyContent: "center" },
   cpIconWrap: { alignSelf: "center", width: 88, height: 88, borderRadius: 44, backgroundColor: COLORS.brandLight, alignItems: "center", justifyContent: "center", marginBottom: SPACING.lg },
   loginLogo: { width: 120, height: 120, alignSelf: "center", marginBottom: SPACING.lg },
@@ -846,13 +852,13 @@ const styles = StyleSheet.create({
   },
   errorText: { color: COLORS.white, flex: 1, fontSize: 13 },
   dashHeader: {
-    paddingHorizontal: SPACING.lg,
+    paddingHorizontal: SPACING.md,
     paddingTop: SPACING.md,
     paddingBottom: SPACING.md,
     backgroundColor: COLORS.surfaceSecondary,
     borderBottomWidth: 1,
     borderBottomColor: COLORS.border,
-    gap: SPACING.md,
+    gap: SPACING.sm,
   },
   profileRow: {
     flexDirection: "row",
@@ -875,11 +881,12 @@ const styles = StyleSheet.create({
   headerActions: {
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "flex-end",
-    gap: SPACING.sm,
+    justifyContent: "flex-start",
+    gap: 6,
     flexWrap: "wrap",
+    width: "100%",
   },
-  languageWrap: { marginRight: "auto" },
+  languageWrap: { marginRight: "auto", flexShrink: 0 },
   avatarFallback: {
     backgroundColor: COLORS.brandLight,
     alignItems: "center",
@@ -927,12 +934,12 @@ const styles = StyleSheet.create({
   btnPriText: { color: COLORS.white, fontWeight: "700" },
   btnSec: { backgroundColor: COLORS.surfaceTertiary },
   btnSecText: { color: COLORS.navy, fontWeight: "600" },
-  quickRow: { backgroundColor: COLORS.surfaceSecondary, borderBottomWidth: 1, borderBottomColor: COLORS.border },
+  quickRow: { flexGrow: 0, backgroundColor: COLORS.surfaceSecondary, borderBottomWidth: 1, borderBottomColor: COLORS.border },
   quickRowContent: { paddingHorizontal: SPACING.lg, paddingVertical: SPACING.md, gap: SPACING.sm },
   quickBtn: { alignItems: "center", width: 80, flexShrink: 0 },
   quickIcon: { width: 48, height: 48, borderRadius: 24, backgroundColor: COLORS.brandLight, alignItems: "center", justifyContent: "center" },
   quickLabel: { fontSize: 11, fontWeight: "700", color: COLORS.navy, marginTop: 6, textAlign: "center" },
-  dateStrip: { backgroundColor: COLORS.surfaceSecondary, borderBottomWidth: 1, borderBottomColor: COLORS.border },
+  dateStrip: { flexGrow: 0, backgroundColor: COLORS.surfaceSecondary, borderBottomWidth: 1, borderBottomColor: COLORS.border },
   dateStripContent: { paddingHorizontal: SPACING.lg, paddingVertical: SPACING.md, gap: SPACING.sm },
   dateChip: {
     width: 54,
@@ -946,7 +953,7 @@ const styles = StyleSheet.create({
   dateChipSel: { backgroundColor: COLORS.brand },
   dateChipDay: { fontSize: 11, color: COLORS.onSurfaceMuted, fontWeight: "700" },
   dateChipDate: { fontSize: 18, color: COLORS.navy, fontWeight: "800", marginTop: 2 },
-  dashBody: { padding: SPACING.lg, paddingBottom: SPACING.xxxl + 60 },
+  dashBody: { paddingHorizontal: SPACING.md, paddingTop: SPACING.lg, paddingBottom: SPACING.md },
   sectionHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: SPACING.md },
   sectionTitle: { fontSize: 16, fontWeight: "700", color: COLORS.navy },
   emptyText: { fontSize: 14, color: COLORS.onSurfaceMuted, textAlign: "center", marginVertical: SPACING.md },

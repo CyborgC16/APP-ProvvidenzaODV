@@ -18,16 +18,16 @@ const makeMessage = (role: "user" | "assistant", content: string): ChatItem => (
 });
 
 const QUICK = [
-  "Aggiungi un servizio",
+  "Aggiungi un servizio domani alle 15",
+  "Annulla l’ultimo servizio",
   "Che turno faccio domani?",
   "Quale mezzo ho assegnato?",
-  "Qual è il mio prossimo Servizio?",
 ];
 
 export default function AssistenteScreen() {
   const { user } = useAuth();
   const [messages, setMessages] = useState<ChatItem[]>([
-    makeMessage("assistant", "Ciao! Posso creare un servizio guidandoti passo passo oppure leggere turni, mezzi e pazienti assegnati."),
+    makeMessage("assistant", "Ciao! Parlami normalmente: posso creare o annullare servizi e consultare turni, mezzi e pazienti assegnati."),
   ]);
   const [input, setInput] = useState("");
   const [sending, setSending] = useState(false);
@@ -70,7 +70,7 @@ export default function AssistenteScreen() {
           <View style={styles.iconBadge}><Ionicons name="sparkles" size={25} color={COLORS.white} /></View>
           <View style={styles.headerText}>
             <Text style={styles.title}>Assistente Provvidenza</Text>
-            <Text style={styles.subtitle}>Conversazione guidata · conferma obbligatoria</Text>
+            <Text style={styles.subtitle}>Linguaggio naturale · conferma obbligatoria</Text>
           </View>
           <View style={styles.onlineDot} />
         </LinearGradient>

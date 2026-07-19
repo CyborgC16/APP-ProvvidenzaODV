@@ -17,6 +17,7 @@ import re
 import urllib.request
 import urllib.error
 import asyncio
+import unicodedata
 from zoneinfo import ZoneInfo
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
@@ -241,27 +242,109 @@ GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "").strip()
 GEMINI_MODEL = os.environ.get("GEMINI_MODEL", "gemini-3.5-flash").strip()
 
 
+def _assistant_normalize(text: str) -> str:
+    value = unicodedata.normalize("NFKD", text.lower().strip())
+    return "".join(ch for ch in value if not unicodedata.combining(ch))
+
+
+def _assistant_parse_date(text: str) -> Optional[str]:
+    normalized = _assistant_normalize(text)
+    today = datetime.now(ROME_TZ).date()
+    if "dopodomani" in normalized:
+        return (today + timedelta(days=2)).isoformat()
+    if "domani" in normalized:
+        return (today + timedelta(days=1)).isoformat()
+    if "oggi" in normalized:
+        return today.isoformat()
+
+    weekdays = {
+        "lunedi": 0, "martedi": 1, "mercoledi": 2, "giovedi": 3,
+        "venerdi": 4, "sabato": 5, "domenica": 6,
+    }
+    for name, weekday in weekdays.items():
+        if name in normalized:
+            delta = (weekday - today.weekday()) % 7
+            if delta == 0 and any(word in normalized for word in ("prossimo", "prossima")):
+                delta = 7
+            return (today + timedelta(days=delta)).isoformat()
+
+    match = re.search(r"\b(\d{1,2})[/-](\d{1,2})(?:[/-](\d{2,4}))?\b", normalized)
+    if match:
+        day, month, year = int(match.group(1)), int(match.group(2)), match.group(3)
+        year_num = today.year if not year else int(year) + (2000 if len(year) == 2 else 0)
+        try:
+            candidate = datetime(year_num, month, day).date()
+            if not year and candidate < today:
+                candidate = candidate.replace(year=today.year + 1)
+            return candidate.isoformat()
+        except ValueError:
+            return None
+    iso = re.search(r"\b(20\d{2})-(\d{2})-(\d{2})\b", normalized)
+    if iso:
+        try:
+            return datetime.strptime(iso.group(0), "%Y-%m-%d").date().isoformat()
+        except ValueError:
+            return None
+    return None
+
+
 def _assistant_target_date(text: str) -> str:
-    now = datetime.now(ROME_TZ)
-    lower = text.lower()
-    if "dopodomani" in lower:
-        return (now + timedelta(days=2)).date().isoformat()
-    if "domani" in lower:
-        return (now + timedelta(days=1)).date().isoformat()
-    return now.date().isoformat()
+    return _assistant_parse_date(text) or datetime.now(ROME_TZ).date().isoformat()
+
+
+def _assistant_parse_time(text: str) -> Optional[str]:
+    normalized = _assistant_normalize(text).replace('.', ':')
+    word_hours = {
+        "mezzogiorno": 12, "mezzanotte": 0, "una": 1, "due": 2, "tre": 3,
+        "quattro": 4, "cinque": 5, "sei": 6, "sette": 7, "otto": 8,
+        "nove": 9, "dieci": 10, "undici": 11, "dodici": 12,
+        "tredici": 13, "quattordici": 14, "quindici": 15, "sedici": 16,
+        "diciassette": 17, "diciotto": 18, "diciannove": 19, "venti": 20,
+    }
+    explicit = re.search(r"(?:alle|ore|verso|per le)\s*(\d{1,2})(?::(\d{2}))?\b", normalized)
+    candidates = [explicit] if explicit else list(re.finditer(r"\b(\d{1,2}):(\d{2})\b", normalized))
+    for match in candidates:
+        if match:
+            hour, minute = int(match.group(1)), int(match.group(2) or 0)
+            if 0 <= hour <= 23 and 0 <= minute <= 59:
+                return f"{hour:02d}:{minute:02d}"
+    for word, hour in word_hours.items():
+        if re.search(rf"(?:alle|ore|verso|per le)\s+{word}\b", normalized):
+            if hour <= 7 and any(x in normalized for x in ("pomeriggio", "sera")):
+                hour += 12
+            return f"{hour:02d}:00"
+    stripped = normalized.strip()
+    if re.fullmatch(r"\d{1,2}", stripped):
+        hour = int(stripped)
+        if 0 <= hour <= 23:
+            return f"{hour:02d}:00"
+    return None
+
+
+def _assistant_parse_vehicle(text: str) -> Optional[str]:
+    normalized = _assistant_normalize(text)
+    if any(word in normalized for word in ("ambulanza", "ambulance")):
+        return "ambulanza"
+    if any(word in normalized for word in ("auto", "macchina", "furgone", "pulmino", "vettura")):
+        return "furgone"
+    return None
 
 
 def _assistant_local_intent(text: str) -> str:
-    lower = text.lower()
-    if any(k in lower for k in ("turno", "turni", "orario")):
+    lower = _assistant_normalize(text)
+    if _assistant_is_cancel_service(text):
+        return "cancel_service"
+    if _assistant_is_create(text):
+        return "create_service"
+    if any(k in lower for k in ("turno", "turni", "orario", "quando sono di turno", "quando lavoro")):
         return "my_shift"
-    if any(k in lower for k in ("auto", "ambulanza", "mezzo", "veicolo")):
+    if any(k in lower for k in ("mezzo", "veicolo", "macchina assegnata", "auto assegnata", "ambulanza assegnata")):
         return "my_vehicle"
-    if any(k in lower for k in ("paziente", "trasporto chi", "chi devo")):
+    if any(k in lower for k in ("paziente", "trasporto chi", "chi devo", "chi porto")):
         return "my_patient"
-    if any(k in lower for k in ("prossimo servizio", "servizio prossimo", "quando lavoro")):
+    if any(k in lower for k in ("prossimo servizio", "servizio prossimo", "prossimo trasporto")):
         return "next_service"
-    if any(k in lower for k in ("quanti servizi", "servizi oggi", "servizi domani")):
+    if any(k in lower for k in ("quanti servizi", "numero servizi", "servizi oggi", "servizi domani")):
         return "service_count"
     return "help"
 
@@ -269,32 +352,31 @@ def _assistant_local_intent(text: str) -> str:
 def _gemini_classify_sync(message: str, history: list[dict]) -> Optional[str]:
     if not GEMINI_API_KEY:
         return None
+    history_text = "\n".join(f"{m.get('role')}: {m.get('content')}" for m in history[-6:])
     prompt = (
-        "Classifica la richiesta per il gestionale La Provvidenza. "
-        "Rispondi esclusivamente con JSON valido: {\"intent\":\"...\"}. "
-        "Intent consentiti: my_shift, my_vehicle, my_patient, next_service, service_count, help. "
-        "Non inventare dati. Richiesta: " + message
+        "Sei il classificatore dell'assistente del gestionale La Provvidenza. "
+        "Comprendi sinonimi e frasi colloquiali italiane. Rispondi solo con JSON valido "
+        "nel formato {\"intent\":\"...\"}. Intent: create_service, cancel_service, my_shift, "
+        "my_vehicle, my_patient, next_service, service_count, help. "
+        "Usa cancel_service quando l'utente vuole annullare o cancellare un servizio gia creato; "
+        "usa create_service quando vuole aggiungere, prenotare o bloccare un servizio.\n"
+        f"Cronologia:\n{history_text}\nRichiesta: {message}"
     )
-    payload = {
-        "contents": [{"role": "user", "parts": [{"text": prompt}]}],
-        "generationConfig": {"temperature": 0, "responseMimeType": "application/json"},
-    }
+    payload = {"contents": [{"role": "user", "parts": [{"text": prompt}]}], "generationConfig": {"temperature": 0, "responseMimeType": "application/json"}}
     req = urllib.request.Request(
         f"https://generativelanguage.googleapis.com/v1beta/models/{GEMINI_MODEL}:generateContent",
         data=json.dumps(payload).encode("utf-8"),
-        headers={"Content-Type": "application/json", "x-goog-api-key": GEMINI_API_KEY},
-        method="POST",
+        headers={"Content-Type": "application/json", "x-goog-api-key": GEMINI_API_KEY}, method="POST",
     )
     try:
         with urllib.request.urlopen(req, timeout=12) as response:
             data = json.loads(response.read().decode("utf-8"))
-        text = data["candidates"][0]["content"]["parts"][0]["text"]
-        intent = json.loads(text).get("intent")
-        if intent in {"my_shift", "my_vehicle", "my_patient", "next_service", "service_count", "help"}:
-            return intent
+        intent = json.loads(data["candidates"][0]["content"]["parts"][0]["text"]).get("intent")
+        allowed = {"create_service", "cancel_service", "my_shift", "my_vehicle", "my_patient", "next_service", "service_count", "help"}
+        return intent if intent in allowed else None
     except Exception as exc:
-        logger.warning("Gemini non disponibile, uso classificazione locale: %s", exc)
-    return None
+        logger.warning("Gemini non disponibile, uso comprensione locale: %s", exc)
+        return None
 
 
 async def _assistant_my_shifts(user_id: str, date_from: Optional[str] = None) -> list[dict]:
@@ -306,65 +388,32 @@ async def _assistant_my_shifts(user_id: str, date_from: Optional[str] = None) ->
 
 ASSISTANT_SESSION_MINUTES = 20
 
-def _assistant_parse_date(text: str) -> Optional[str]:
-    normalized = text.lower().strip()
-    today = datetime.now(ROME_TZ).date()
-    if "dopodomani" in normalized:
-        return (today + timedelta(days=2)).isoformat()
-    if "domani" in normalized:
-        return (today + timedelta(days=1)).isoformat()
-    if "oggi" in normalized:
-        return today.isoformat()
-    match = re.search(r"\b(\d{1,2})[/-](\d{1,2})(?:[/-](\d{2,4}))?\b", normalized)
-    if match:
-        day, month, year = int(match.group(1)), int(match.group(2)), match.group(3)
-        year_num = today.year if not year else int(year) + (2000 if len(year) == 2 else 0)
-        try:
-            return datetime(year_num, month, day).date().isoformat()
-        except ValueError:
-            return None
-    iso = re.search(r"\b(20\d{2})-(\d{2})-(\d{2})\b", normalized)
-    if iso:
-        try:
-            return datetime.strptime(iso.group(0), "%Y-%m-%d").date().isoformat()
-        except ValueError:
-            return None
-    return None
-
-def _assistant_parse_time(text: str) -> Optional[str]:
-    normalized = text.lower().replace('.', ':')
-    explicit = re.search(r"(?:alle|ore|verso)\s*(\d{1,2})(?::(\d{2}))?\b", normalized)
-    candidates = [explicit] if explicit else list(re.finditer(r"\b(\d{1,2}):(\d{2})\b", normalized))
-    for match in candidates:
-        if not match:
-            continue
-        hour = int(match.group(1)); minute = int(match.group(2) or 0)
-        if 0 <= hour <= 23 and 0 <= minute <= 59:
-            return f"{hour:02d}:{minute:02d}"
-    stripped = normalized.strip()
-    if re.fullmatch(r"\d{1,2}", stripped):
-        hour = int(stripped)
-        if 0 <= hour <= 23:
-            return f"{hour:02d}:00"
-    return None
-
-def _assistant_parse_vehicle(text: str) -> Optional[str]:
-    normalized = text.lower()
-    if "ambulanza" in normalized:
-        return "ambulanza"
-    if any(word in normalized for word in ("auto", "macchina", "furgone")):
-        return "furgone"
-    return None
 
 def _assistant_is_create(text: str) -> bool:
-    normalized = text.lower()
-    return any(word in normalized for word in ("aggiungi", "crea", "prenota", "blocca")) and any(word in normalized for word in ("servizio", "slot", "trasporto", "ambulanza", "auto", "furgone"))
+    normalized = _assistant_normalize(text)
+    object_words = ("servizio", "slot", "trasporto", "ambulanza", "auto", "furgone", "prenotazione")
+    action_words = ("aggiungi", "crea", "prenota", "blocca", "inserisci", "registra", "metti", "fissa", "organizza", "serve")
+    return (any(word in normalized for word in action_words) and any(word in normalized for word in object_words)) or (
+        any(word in normalized for word in ("servizio", "trasporto")) and (_assistant_parse_date(text) is not None or _assistant_parse_time(text) is not None)
+    )
+
+
+def _assistant_is_cancel_service(text: str) -> bool:
+    normalized = _assistant_normalize(text)
+    cancellation = any(word in normalized for word in ("annulla", "annullare", "cancella", "cancellare", "elimina", "rimuovi", "disdici"))
+    target = any(word in normalized for word in ("servizio", "slot", "trasporto", "prenotazione", "quello", "appena creato", "ultimo"))
+    return cancellation and target
+
 
 def _assistant_is_confirm(text: str) -> bool:
-    return text.lower().strip() in {"confermo", "conferma", "sì", "si", "ok", "procedi", "va bene"}
+    normalized = _assistant_normalize(text)
+    return normalized in {"confermo", "conferma", "si", "ok", "procedi", "va bene", "esegui", "fallo", "certo"}
 
-def _assistant_is_cancel(text: str) -> bool:
-    return text.lower().strip() in {"annulla", "annullo", "cancella", "lascia perdere", "stop"}
+
+def _assistant_is_abort(text: str) -> bool:
+    normalized = _assistant_normalize(text)
+    return normalized in {"annulla", "annullo", "lascia perdere", "stop", "interrompi", "non importa", "no"}
+
 
 async def _assistant_get_session(user_id: str) -> Optional[dict]:
     doc = await db.assistant_sessions.find_one({"user_id": user_id}, {"_id": 0})
@@ -380,13 +429,16 @@ async def _assistant_get_session(user_id: str) -> Optional[dict]:
             pass
     return doc
 
+
 async def _assistant_save_session(user_id: str, state: dict) -> None:
     now = datetime.now(timezone.utc)
     state.update({"user_id": user_id, "updated_at": now.isoformat(), "expires_at": (now + timedelta(minutes=ASSISTANT_SESSION_MINUTES)).isoformat()})
     await db.assistant_sessions.update_one({"user_id": user_id}, {"$set": state}, upsert=True)
 
+
 async def _assistant_clear_session(user_id: str) -> None:
     await db.assistant_sessions.delete_one({"user_id": user_id})
+
 
 def _assistant_summary(data: dict) -> str:
     vehicle = "Ambulanza" if data.get("vehicle_type") == "ambulanza" else "Auto/Furgone"
@@ -395,12 +447,13 @@ def _assistant_summary(data: dict) -> str:
     return (f"Riepilogo del servizio:\n• Data: {data.get('date')}\n• Ora: {data.get('time')}\n"
             f"• Mezzo: {vehicle}\n• Paziente: {patient}\n• Destinazione/indirizzo: {address}\n\nConfermi?")
 
+
 async def _assistant_create_manual_booking(data: dict, user: dict) -> dict:
     validate_booking_day_time(data["date"], data["time"])
     booked = await count_active_bookings(data["date"], data["vehicle_type"])
     capacity = DAILY_CAPACITY[data["vehicle_type"]]
     if booked >= capacity:
-        raise HTTPException(status_code=409, detail="Nessuno slot disponibile per questo mezzo, giorno e orario")
+        raise HTTPException(status_code=409, detail="Nessuno slot disponibile per questo mezzo e giorno")
     now = datetime.now(timezone.utc).isoformat()
     booking_doc = {
         "id": str(uuid.uuid4()), "slot_date": data["date"], "slot_time": data["time"],
@@ -413,6 +466,28 @@ async def _assistant_create_manual_booking(data: dict, user: dict) -> dict:
     }
     await db.bookings.insert_one(booking_doc)
     return {k: v for k, v in booking_doc.items() if k != "_id"}
+
+
+async def _assistant_find_bookings_to_cancel(text: str, user: dict) -> list[dict]:
+    query: dict[str, Any] = {"status": {"$in": ACTIVE_STATUSES}}
+    if user.get("role") not in ("master", "admin"):
+        query["created_by"] = user["id"]
+    target_date = _assistant_parse_date(text)
+    target_time = _assistant_parse_time(text)
+    if target_date:
+        query["slot_date"] = target_date
+    else:
+        query["slot_date"] = {"$gte": datetime.now(ROME_TZ).date().isoformat()}
+    if target_time:
+        query["slot_time"] = target_time
+    docs = await db.bookings.find(query, {"_id": 0}).sort([("created_at", -1)]).to_list(10)
+    return docs
+
+
+def _assistant_cancel_summary(booking: dict) -> str:
+    vehicle = "Ambulanza" if booking.get("vehicle_type") == "ambulanza" else "Auto/Furgone"
+    patient = booking.get("patient_name") or "paziente non indicato"
+    return f"Vuoi annullare il servizio del {booking.get('slot_date')} alle {booking.get('slot_time')} · {vehicle} · {patient}?"
 
 
 # ===== Models =====
@@ -1687,101 +1762,147 @@ async def delete_shift(shift_id: str, user: dict = Depends(require_role("master"
     return {"ok": True}
 
 
-# ----- Assistente Provvidenza: lettura + creazione guidata -----
+# ----- Assistente Provvidenza: comprensione naturale, lettura, creazione e annullamento -----
 @api_router.post("/assistant/chat", response_model=AssistantChatResponse)
 async def assistant_chat(body: AssistantChatRequest, user: dict = Depends(get_current_user)):
     text = body.message.strip()
-    local_intent = _assistant_local_intent(text)
     session = await _assistant_get_session(user["id"])
     source = "local"
-    suggestions = ["Aggiungi un servizio", "Che turno faccio domani?", "Quale mezzo ho assegnato?"]
+    suggestions = ["Aggiungi un servizio domani alle 15", "Annulla l'ultimo servizio", "Che turno faccio domani?"]
     phase = session.get("phase") if session else None
     created_booking_id = None
 
-    if _assistant_is_cancel(text) and session:
+    if session and session.get("intent") == "create_service" and _assistant_is_abort(text):
         await _assistant_clear_session(user["id"])
-        reply, intent, phase = "Operazione annullata. Non è stato creato alcun servizio.", "create_service", "cancelled"
+        reply, intent, phase = "Operazione interrotta. Non è stato creato alcun servizio.", "create_service", "cancelled"
+
+    elif session and session.get("intent") == "cancel_service":
+        booking = session.get("data", {}).get("booking", {})
+        if _assistant_is_confirm(text):
+            result = await db.bookings.update_one(
+                {"id": booking.get("id"), "status": {"$in": ACTIVE_STATUSES}},
+                {"$set": {"status": "annullata", "cancel_reason": "Annullato tramite Assistente Provvidenza", "cancelled_at": datetime.now(timezone.utc).isoformat(), "cancelled_by": user["id"]}},
+            )
+            await _assistant_clear_session(user["id"])
+            intent, phase = "cancel_service", "completed"
+            reply = "Servizio annullato correttamente e slot liberato." if result.modified_count else "Il servizio risultava già annullato o non è più disponibile."
+        elif _assistant_is_abort(text):
+            await _assistant_clear_session(user["id"])
+            reply, intent, phase = "Annullamento del servizio interrotto. Non ho modificato nulla.", "cancel_service", "cancelled"
+        else:
+            reply, intent, phase = "Rispondi ‘confermo’ per annullare il servizio oppure ‘no’ per lasciarlo invariato.", "cancel_service", "confirm_cancel"
+
     elif session and session.get("intent") == "create_service":
         if user.get("role") not in ("master", "admin"):
             await _assistant_clear_session(user["id"])
             raise HTTPException(status_code=403, detail="Solo master e volontari autorizzati possono creare Servizi")
         data = session.get("data", {})
         current = session.get("phase")
-        if current == "ask_date":
-            value = _assistant_parse_date(text)
-            if not value:
-                reply, intent, phase = "Indica il giorno, ad esempio ‘domani’ oppure ‘25/07’.", "create_service", current
-            else:
-                data["date"] = value; phase = "ask_time"; reply, intent = "A che ora devo bloccare lo slot?", "create_service"
-        elif current == "ask_time":
-            value = _assistant_parse_time(text)
-            if not value:
-                reply, intent, phase = "Indica un orario preciso, ad esempio ‘alle 15:30’.", "create_service", current
-            else:
-                data["time"] = value; phase = "ask_vehicle"; reply, intent = "Auto/furgone o ambulanza?", "create_service"
-        elif current == "ask_vehicle":
-            value = _assistant_parse_vehicle(text)
-            if not value:
-                reply, intent, phase = "Scegli ‘ambulanza’ oppure ‘auto/furgone’.", "create_service", current
-            else:
-                data["vehicle_type"] = value; phase = "ask_patient"; reply, intent = "Qual è il nome del paziente? Scrivi ‘salta’ se non vuoi indicarlo ora.", "create_service"
+        # Accetta informazioni anticipate anche se l'utente risponde con una frase completa.
+        parsed_date, parsed_time, parsed_vehicle = _assistant_parse_date(text), _assistant_parse_time(text), _assistant_parse_vehicle(text)
+        if parsed_date: data["date"] = parsed_date
+        if parsed_time: data["time"] = parsed_time
+        if parsed_vehicle: data["vehicle_type"] = parsed_vehicle
+
+        if current == "ask_date" and not data.get("date"):
+            reply, intent, phase = "Per quale giorno? Puoi dire, per esempio, ‘domani’ o ‘venerdì’. ", "create_service", "ask_date"
+        elif not data.get("date"):
+            reply, intent, phase = "Per quale giorno devo creare il servizio?", "create_service", "ask_date"
+        elif not data.get("time"):
+            reply, intent, phase = "A che ora devo bloccare lo slot?", "create_service", "ask_time"
+        elif not data.get("vehicle_type"):
+            reply, intent, phase = "Serve un’ambulanza oppure un’auto/furgone?", "create_service", "ask_vehicle"
+        elif current in {"ask_date", "ask_time", "ask_vehicle"}:
+            phase, reply, intent = "ask_patient", "Qual è il nome del paziente? Puoi anche dire ‘salta’.", "create_service"
         elif current == "ask_patient":
-            data["patient_name"] = None if text.lower() in {"salta", "non indicato", "nessuno"} else text
-            phase = "ask_address"; reply, intent = "Qual è la destinazione o l’indirizzo? Scrivi ‘salta’ se non vuoi indicarlo ora.", "create_service"
+            data["patient_name"] = None if _assistant_normalize(text) in {"salta", "nessuno", "non indicato", "non lo so"} else text
+            phase, reply, intent = "ask_address", "Qual è la destinazione o l’indirizzo? Puoi anche dire ‘salta’.", "create_service"
         elif current == "ask_address":
-            data["address"] = None if text.lower() in {"salta", "non indicata", "nessuno"} else text
-            phase = "confirm"; reply, intent = _assistant_summary(data), "create_service"
+            data["address"] = None if _assistant_normalize(text) in {"salta", "nessuno", "non indicata", "non lo so"} else text
+            phase, reply, intent = "confirm", _assistant_summary(data), "create_service"
         elif current == "confirm":
             if _assistant_is_confirm(text):
                 booking = await _assistant_create_manual_booking(data, user)
                 created_booking_id = booking["id"]
-                await _assistant_clear_session(user["id"]); phase = "completed"; intent = "create_service"
-                reply = f"Servizio creato e slot bloccato per il {booking['slot_date']} alle {booking['slot_time']}."
+                await _assistant_save_session(user["id"], {"intent": "completed_service", "phase": "completed", "data": {"booking": booking}})
+                phase, intent = "completed", "create_service"
+                reply = f"Servizio creato e slot bloccato per il {booking['slot_date']} alle {booking['slot_time']}. Puoi dire ‘annulla l’ultimo servizio’ per cancellarlo."
+            elif _assistant_is_abort(text):
+                await _assistant_clear_session(user["id"])
+                reply, intent, phase = "Operazione interrotta. Non ho creato il servizio.", "create_service", "cancelled"
             else:
-                reply, intent, phase = "Scrivi ‘confermo’ per creare il servizio oppure ‘annulla’ per interrompere.", "create_service", current
+                reply, intent, phase = "Confermi la creazione? Rispondi ‘confermo’ oppure ‘annulla’.", "create_service", "confirm"
         else:
-            await _assistant_clear_session(user["id"]); reply, intent, phase = "La sessione è stata azzerata. Scrivi ‘aggiungi un servizio’ per ricominciare.", "create_service", "cancelled"
+            phase, reply, intent = "ask_patient", "Qual è il nome del paziente? Puoi anche dire ‘salta’.", "create_service"
         if phase not in {"completed", "cancelled"}:
             await _assistant_save_session(user["id"], {"intent": "create_service", "phase": phase, "data": data})
-    elif _assistant_is_create(text):
-        if user.get("role") not in ("master", "admin"):
-            raise HTTPException(status_code=403, detail="Solo master e volontari autorizzati possono creare Servizi")
-        data: dict[str, Any] = {}
-        date_value = _assistant_parse_date(text); time_value = _assistant_parse_time(text); vehicle_value = _assistant_parse_vehicle(text)
-        if date_value: data["date"] = date_value
-        if time_value: data["time"] = time_value
-        if vehicle_value: data["vehicle_type"] = vehicle_value
-        if not data.get("date"): phase, reply = "ask_date", "Per quale giorno?"
-        elif not data.get("time"): phase, reply = "ask_time", "A che ora devo bloccare lo slot?"
-        elif not data.get("vehicle_type"): phase, reply = "ask_vehicle", "Auto/furgone o ambulanza?"
-        else: phase, reply = "ask_patient", "Qual è il nome del paziente? Scrivi ‘salta’ se non vuoi indicarlo ora."
-        intent = "create_service"
-        await _assistant_save_session(user["id"], {"intent": intent, "phase": phase, "data": data})
+
     else:
+        local_intent = _assistant_local_intent(text)
         gemini_intent = await asyncio.to_thread(_gemini_classify_sync, text, [m.model_dump() for m in body.history])
         intent = gemini_intent or local_intent
         source = "gemini" if gemini_intent else "local"
-        target_date = _assistant_target_date(text); today = datetime.now(ROME_TZ).date().isoformat()
-        if intent in {"my_shift", "my_vehicle", "my_patient"}:
-            shifts = await _assistant_my_shifts(user["id"]); day_shifts = [shift for shift in shifts if shift.get("date") == target_date]
-            if not day_shifts:
-                reply = f"Non risultano turni assegnati per {'domani' if target_date != today else 'oggi'}."
+
+        if intent == "cancel_service":
+            if user.get("role") not in ("master", "admin"):
+                raise HTTPException(status_code=403, detail="Non sei autorizzato ad annullare Servizi")
+            # Se la sessione conserva l'ultimo servizio creato, preferiscilo.
+            recent = session.get("data", {}).get("booking") if session and session.get("intent") == "completed_service" else None
+            matches = [recent] if recent and recent.get("status") != "annullata" and not _assistant_parse_date(text) and not _assistant_parse_time(text) else await _assistant_find_bookings_to_cancel(text, user)
+            matches = [m for m in matches if m]
+            if not matches:
+                reply, phase = "Non ho trovato servizi attivi compatibili con la richiesta. Indica giorno e ora, per esempio: ‘annulla il servizio di domani alle 15’.", None
+            elif len(matches) > 1 and not (_assistant_parse_date(text) and _assistant_parse_time(text)):
+                options = "\n".join(f"• {b.get('slot_date')} alle {b.get('slot_time')} · {b.get('vehicle_type')} · {b.get('patient_name') or 'paziente non indicato'}" for b in matches[:5])
+                reply, phase = f"Ho trovato più servizi:\n{options}\n\nIndicami anche l’orario del servizio da annullare.", None
             else:
-                shift = day_shifts[0]; time_text = shift.get("time_start") or "orario non indicato"
-                if intent == "my_vehicle": reply = f"Per il turno del {target_date} alle {time_text} risulta: {shift.get('vehicle') or 'nessun mezzo ancora assegnato'}."
-                elif intent == "my_patient": reply = f"Per il turno del {target_date} alle {time_text} risulta: {shift.get('patient_name') or 'nessun paziente ancora indicato'}."
-                else: reply = f"Il tuo turno è il {target_date} dalle {time_text}{('–' + shift.get('time_end')) if shift.get('time_end') else ''}{(', mezzo ' + shift.get('vehicle')) if shift.get('vehicle') else ''}."
-        elif intent == "next_service":
-            shifts = await _assistant_my_shifts(user["id"], today)
-            reply = "Non risultano prossimi Servizi assegnati." if not shifts else f"Il prossimo Servizio è il {shifts[0].get('date')} alle {shifts[0].get('time_start')}{(' con ' + shifts[0].get('vehicle')) if shifts[0].get('vehicle') else ''}."
-        elif intent == "service_count":
-            query = {"slot_date": target_date, "status": {"$in": ACTIVE_STATUSES}}
-            count = await db.bookings.count_documents(query); reply = f"Per il {target_date} risultano {count} Servizi registrati."
+                booking = matches[0]
+                phase = "confirm_cancel"
+                reply = _assistant_cancel_summary(booking)
+                await _assistant_save_session(user["id"], {"intent": "cancel_service", "phase": phase, "data": {"booking": booking}})
+
+        elif intent == "create_service":
+            if user.get("role") not in ("master", "admin"):
+                raise HTTPException(status_code=403, detail="Solo master e volontari autorizzati possono creare Servizi")
+            data: dict[str, Any] = {}
+            date_value, time_value, vehicle_value = _assistant_parse_date(text), _assistant_parse_time(text), _assistant_parse_vehicle(text)
+            if date_value: data["date"] = date_value
+            if time_value: data["time"] = time_value
+            if vehicle_value: data["vehicle_type"] = vehicle_value
+            if not data.get("date"): phase, reply = "ask_date", "Per quale giorno?"
+            elif not data.get("time"): phase, reply = "ask_time", "A che ora devo bloccare lo slot?"
+            elif not data.get("vehicle_type"): phase, reply = "ask_vehicle", "Serve un’ambulanza oppure un’auto/furgone?"
+            else: phase, reply = "ask_patient", "Qual è il nome del paziente? Puoi anche dire ‘salta’."
+            await _assistant_save_session(user["id"], {"intent": "create_service", "phase": phase, "data": data})
+
         else:
-            reply = "Posso creare un servizio con conferma, leggere il tuo turno, il mezzo, il paziente assegnato e il prossimo Servizio."
+            target_date = _assistant_target_date(text)
+            today = datetime.now(ROME_TZ).date().isoformat()
+            if intent in {"my_shift", "my_vehicle", "my_patient"}:
+                shifts = await _assistant_my_shifts(user["id"])
+                day_shifts = [shift for shift in shifts if shift.get("date") == target_date]
+                if not day_shifts:
+                    reply = f"Non risultano turni assegnati per il {target_date}."
+                else:
+                    shift = day_shifts[0]
+                    time_text = shift.get("time_start") or "orario non indicato"
+                    if intent == "my_vehicle": reply = f"Per il turno del {target_date} alle {time_text} risulta: {shift.get('vehicle') or 'nessun mezzo ancora assegnato'}."
+                    elif intent == "my_patient": reply = f"Per il turno del {target_date} alle {time_text} risulta: {shift.get('patient_name') or 'nessun paziente ancora indicato'}."
+                    else: reply = f"Il tuo turno è il {target_date} dalle {time_text}{('–' + shift.get('time_end')) if shift.get('time_end') else ''}{(', mezzo ' + shift.get('vehicle')) if shift.get('vehicle') else ''}."
+            elif intent == "next_service":
+                shifts = await _assistant_my_shifts(user["id"], today)
+                reply = "Non risultano prossimi Servizi assegnati." if not shifts else f"Il prossimo Servizio è il {shifts[0].get('date')} alle {shifts[0].get('time_start')}{(' con ' + shifts[0].get('vehicle')) if shifts[0].get('vehicle') else ''}."
+            elif intent == "service_count":
+                count = await db.bookings.count_documents({"slot_date": target_date, "status": {"$in": ACTIVE_STATUSES}})
+                reply = f"Per il {target_date} risultano {count} Servizi registrati."
+            else:
+                reply = "Puoi parlarmi in modo naturale. Posso creare o annullare un servizio, leggere turni, mezzi, pazienti e prossimi servizi."
 
     await db.assistant_audit.insert_one({"id": str(uuid.uuid4()), "user_id": user["id"], "intent": intent, "source": source, "message": text[:1000], "phase": phase, "created_at": datetime.now(timezone.utc).isoformat()})
-    return AssistantChatResponse(reply=reply, intent=intent, source=source, suggestions=suggestions, phase=phase, requires_confirmation=phase == "confirm", created_booking_id=created_booking_id)
+    return AssistantChatResponse(
+        reply=reply, intent=intent, source=source, suggestions=suggestions, phase=phase,
+        requires_confirmation=phase in {"confirm", "confirm_cancel"}, created_booking_id=created_booking_id,
+    )
 
 
 # ----- Gallery (foto Home) -----
